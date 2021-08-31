@@ -359,6 +359,8 @@ class MongoModel(BaseModel):
         #
         collection = self.get_collection(**kwargs)
         if insert_with_id or not self._id:
+            if self._id:
+                delattr(self, '_id')
             # InsertOneResult
             result = collection.insert_one(self.dict())
             self._id = result.inserted_id

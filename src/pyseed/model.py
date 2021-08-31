@@ -83,6 +83,14 @@ class SimpleEnumMeta(type):
         """ Return value->title dict. """
         return {cls._member_dict_[name]: cls._title_dict_[name] for name in cls._member_dict_}
 
+    def to_title(cls, value):
+        """ Get title from value. """
+        for k, v in cls._member_dict_.items():
+            if v == value:
+                return cls._title_dict_[k]
+        #
+        return None
+
     def from_title(cls, title):
         """ Get value from title. """
         for k, t in cls._title_dict_.items():
@@ -113,10 +121,12 @@ class Format(SimpleEnum):
     INT = 'int'
     FLOAT = 'float'
     SELECT = 'select'
+    TAG = 'tag'  # Tag input
     TEXTAREA = 'textarea'
     RTE = 'rte'
     MARKDOWN = 'markdown'
     IMAGE = 'image'  # Image upload support
+    AVATAR = 'avatar'  # User avatar
     FILE = 'file'  # File upload support
     SWITCH = 'switch'  # Bool
     IPV4 = 'ipv4'
@@ -125,6 +135,13 @@ class Format(SimpleEnum):
     LATLNG = 'latlng'
     TABLE = 'table'
     OBJECTID = 'objectid'
+    # Below values are used for inner model/dict or list of model/dict
+    LIST = 'list'
+    TABS = 'tabs'
+    TABLE = 'table'
+    CARDS = 'cards'
+    CAROUSEL = 'carousel'
+    COLLAPSE = 'collapse'
 
 
 class Comparator(SimpleEnum):
@@ -469,7 +486,7 @@ class BaseModel(metaclass=ModelMeta):
         values = {}
         fields_set = set()
         errors = []
-        #
+        # Validate against schema
         # print(f'Validate {cls.__name__} with {data}')
         for field_name, field_type in cls.__fields__.items():
             field_value, field_errors = cls._validate_field(field_type, data.get(field_name, Undefined))
@@ -478,6 +495,10 @@ class BaseModel(metaclass=ModelMeta):
                 fields_set.add(field_name)
             if field_errors:
                 errors.extend(field_errors)
+        # Check if any non-defined field
+        undefined_fields = set(data.keys()) - set(cls.__fields__.keys())
+        if len(undefined_fields) > 0:
+            errors.append(f'{cls.__name__}: Found undefined data fields, {undefined_fields}')
         #
         return values, fields_set, errors
 
@@ -767,13 +788,16 @@ class BaseModel(metaclass=ModelMeta):
                     origin = get_origin(f_t.type)
                     # Dict
                     if origin is dict:
+                        # TODO: SUPPORT DICT
                         pass
                     # List
                     elif origin is list:
                         l_type = get_args(f_t.type)[0]
+                        inner_type = _gen_schema(l_type)
                         field_schema.update({
                             'type': 'array',
-                            'items': _gen_schema(l_type)
+                            'items': inner_type,
+                            'py_type': f'List[{inner_type["py_type"]}]',
                         })
                     # built-in type, SimpleEnum or sub model
                     else:
