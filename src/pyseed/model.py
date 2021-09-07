@@ -112,36 +112,37 @@ class Format(SimpleEnum):
     https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#data-types
     https://swagger.io/docs/specification/data-models/data-types/
     """
-    DATETIME = 'date-time'
+    DATETIME = 'date-time'  # Default format for datetime
     DATE = 'date'
     PASSWORD = 'password'
     BYTE = 'byte'
     # Below values are self-defined
-    TEXT = 'text'
-    INT = 'int'
-    FLOAT = 'float'
-    SELECT = 'select'
+    TEXT = 'text'  # Default format for str
+    INT = 'int'  # Default format for int
+    FLOAT = 'float'  # Default format for float
+    SELECT = 'select'  # Default format for SimpleEnum
     TAG = 'tag'  # Tag input
+    PASSWORD = 'password'
     TEXTAREA = 'textarea'
     RTE = 'rte'
     MARKDOWN = 'markdown'
     IMAGE = 'image'  # Image upload support
     AVATAR = 'avatar'  # User avatar
     FILE = 'file'  # File upload support
-    SWITCH = 'switch'  # Bool
     IPV4 = 'ipv4'
     IPV6 = 'ipv6'
-    CHART = 'chart'
-    LATLNG = 'latlng'
-    TABLE = 'table'
-    OBJECTID = 'objectid'
+    OBJECTID = 'objectid'  # Default format for ObjectId
+    CHECKBOX = 'checkbox'  # Default format for bool
+    SWITCH = 'switch'
     # Below values are used for inner model/dict or list of model/dict
-    LIST = 'list'
-    TABS = 'tabs'
+    LIST = 'list'  # Default format for List
+    TAB = 'tab'
     TABLE = 'table'
-    CARDS = 'cards'
+    CARD = 'card'
     CAROUSEL = 'carousel'
     COLLAPSE = 'collapse'
+    CASCADER = 'cascader'  # Cascade selection, i.e, List[str]
+    LATLNG = 'latlng'  # LatLng chooser, i.e, List[float]
 
 
 class Comparator(SimpleEnum):
@@ -858,7 +859,7 @@ class BaseModel(metaclass=ModelMeta):
             elif type_ is float:
                 return {'type': 'number', 'format': Format.FLOAT, 'py_type': 'float'}
             elif type_ is bool:
-                return {'type': 'boolean', 'format': Format.SWITCH, 'py_type': 'bool'}
+                return {'type': 'boolean', 'format': Format.CHECKBOX, 'py_type': 'bool'}
             elif type_ is ObjectId:
                 return {'type': 'string', 'format': Format.OBJECTID, 'py_type': 'ObjectId'}
             elif type_ is datetime:

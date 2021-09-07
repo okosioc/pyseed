@@ -17,7 +17,7 @@ from pyseed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel
 
 
 class UserRole(SimpleEnum):
-    """ User roles. """
+    """ User role. """
     MEMBER = 1
     EDITOR = 2
     ADMIN = 9
@@ -72,7 +72,7 @@ class User(MongoModel):
     l: List[str] = None
     d: Dict[str, str] = None
 
-    __indexes = [{'fields': ['email'], 'unique': True}]
+    __indexes__ = [{'fields': ['email'], 'unique': True}]
 
 
 def test_model():
