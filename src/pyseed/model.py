@@ -121,6 +121,7 @@ class Format(SimpleEnum):
     INT = 'int'  # Default format for int
     FLOAT = 'float'  # Default format for float
     SELECT = 'select'  # Default format for SimpleEnum
+    BUTTONGROUP = 'buttongroup'
     TAG = 'tag'  # Tag input
     PASSWORD = 'password'
     TEXTAREA = 'textarea'
@@ -803,7 +804,6 @@ class BaseModel(metaclass=ModelMeta):
                     # built-in type, SimpleEnum or sub model
                     else:
                         field_schema.update(_gen_schema(f_t.type))
-                    #
                     # default
                     if f_t.default:
                         # Skip if default is callable, e.g, datetime.now
@@ -826,7 +826,7 @@ class BaseModel(metaclass=ModelMeta):
                         #
                         if f_t.format in [Format.DATE, Format.DATETIME]:
                             field_schema.update({'type': 'date'})
-                    #
+                    # required
                     properties[f_n] = field_schema
                     if f_t.required:
                         field_schema.update({'required': True})
@@ -839,17 +839,18 @@ class BaseModel(metaclass=ModelMeta):
                     'py_type': type_.__name__,
                 }
                 # layout
+                layout = []
                 if type_.__layout__:
-                    layout = []
-                    rows = type_.__layout__.splitlines()
+                    rows = type_.__layout__.strip().splitlines()
                     for r in rows:
-                        r = r.strip()
+                        r = r.strip().strip(',')
                         if not r:
                             continue
                         layout.append([x.strip() for x in r.split(',')])
-                    #
-                    if layout:
-                        obj['layout'] = layout
+                else:
+                    layout = properties.keys()
+                #
+                obj['layout'] = layout
                 #
                 return obj
             elif type_ is str:

@@ -38,3 +38,8 @@ class DataError(SeedError):
 class DatabaseError(SeedError):
     """ Database error. """
     pass
+
+
+class TemplateError(SeedError):
+    """ Template error. """
+    pass

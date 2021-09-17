@@ -1,0 +1,28 @@
+{% macro render_schema(name, schema, base='') %}
+    {% set path = base + '.' + name if base else name %}
+    {% if schema.type == 'object' -%} {# object #}
+        {% for row in schema.layout %}
+            {% if row|length == 1 and row[0] == '-' %}
+                <hr class="mt-4 mb-5">
+            {% else %}
+                <div class="row">
+                    {% for col in row %}
+                        <div class="col">
+                            {{ render_schema(col, schema.properties[col], path) }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endfor %}
+    {%- elif schema.type == 'array' -%} {# array #}
+        TODO
+    {%- else -%} {# simple field #}
+        {% set field_schema = schema %}
+        {% set field_path = path %}
+        {% include '_field_'+ field_schema.format + '.html.jinja2' %}
+    {%- endif %}
+{% endmacro %}
+
+<form id="{{ model.name_kebab }}-form" class="form-editor needs-validation" novalidate method="post">
+    {{ render_schema(model.name_lower, model.schema) }}
+</form>

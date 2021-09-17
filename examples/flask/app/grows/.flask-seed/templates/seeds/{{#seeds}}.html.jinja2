@@ -1,0 +1,15 @@
+{% set model = seed.model %}
+<div class="card">
+    <div class="card-header">
+        <h4 class="card-header-title">
+            {{ model.title if model.title else model.name }}{{ seed.action }}
+        </h4>
+    </div>
+    <div class="card-body">
+        {% if seed.action in ['read', 'form', 'query'] %}
+            {% include '_model_' + seed.action + '.html.jinja2'  %}
+        {% else %}
+            TODO: unsupport action {{ seed.action }}
+        {% endif %}
+    </div>
+</div>

@@ -1,0 +1,20 @@
+{% extends "pub.html" %}
+{% block title %}Index{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+                <div class="col">
+                        {% include "seeds/block_promos.html" %}
+                </div>
+                <div class="col">
+                        {% include "seeds/block_features.html" %}
+                </div>
+                <div class="col">
+                        {% include "seeds/block_counters.html" %}
+                </div>
+                <div class="col">
+                        {% include "seeds/block_news.html" %}
+                </div>
+    </div>
+</div>
+{% endblock %}

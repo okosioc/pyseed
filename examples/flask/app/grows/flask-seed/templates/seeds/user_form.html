@@ -1,0 +1,66 @@
+<div class="card">
+    <div class="card-header">
+        <h4 class="card-header-title">
+            Userform
+        </h4>
+    </div>
+    <div class="card-body">
+
+<form id="user-form" class="form-editor needs-validation" novalidate method="post">
+                    <div class="row">
+                        <div class="col">
+                            TODO
+                        </div>
+                </div>
+                <div class="row">
+                        <div class="col">
+                            <div class="form-group" name="user.name">
+    <label>NAME</label>
+    <input name="user.name" type="string" class="form-control" required
+           value="{{ user.name or '' }}">
+</div>
+                        </div>
+                        <div class="col">
+                            <div class="form-group" name="user.email">
+    <label>EMAIL</label>
+    <input name="user.email" type="string" class="form-control" required
+           value="{{ user.email or '' }}">
+</div>
+                        </div>
+                </div>
+                <div class="row">
+                        <div class="col">
+                            <div class="form-group" name="user.status">
+    <label>STATUS</label>
+         <select class="custom-select select2" name="user.status" required>
+            <option value="">Choose...</option>
+                <option value="normal" {{ 'selected' if 'normal'==user.status }}>
+                Normal
+                </option>
+                <option value="rejected" {{ 'selected' if 'rejected'==user.status }}>
+                Rejected
+                </option>
+        </select>
+</div>
+                        </div>
+                        <div class="col">
+                                    TODO
+                        </div>
+                </div>
+                <div class="row">
+                        <div class="col">
+                            TODO
+                        </div>
+                </div>
+                <div class="row">
+                        <div class="col">
+                            <div class="form-group" name="user.intro">
+    <label>INTRO</label>
+    <textarea name="user.intro" rows="5"
+              class="form-control" >{{ user.intro or '' }}</textarea>
+</div>
+                        </div>
+                </div>
+
+</form>    </div>
+</div>

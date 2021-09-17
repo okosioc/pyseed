@@ -1,0 +1,22 @@
+<div class="form-group" name="{{ field_path }}">
+    <label>{{ field_schema.title }}</label>
+    <div class="radio-input-group" {{ 'required' if field_schema.required }}>
+        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+            {% if field_schema.enum %}
+                {% for value, label in field_schema.enum_titles|items %}
+                    <label class="btn btn-light {{ '{{' }} 'active' if {{ value|quote }}=={{ field_path }} {{ '}}' }}">
+                        <input type="radio" {{ '{{' }} 'checked' if {{ value|quote }}=={{ field_path }} {{ '}}' }}
+                        value="{{ value }}"> {{ label }}
+                    </label>
+                {% endfor %}
+            {% elif field_schema.type == 'boolean' %}
+                <label class="btn btn-light {{ '{{' }} 'active' if {{ value }} == true {{ '}}' }}">
+                    <input type="radio" {{ '{{' }} 'checked' if {{ value }} == true {{ '}}' }} value="true"> True
+                </label>
+                <label class="btn btn-light {{ '{{' }} 'active' if {{ value }} == false {{ '}}' }}">
+                    <input type="radio" {{ '{{' }} 'checked' if {{ value }} == false {{ '}}' }} value="false"> False
+                </label>
+            {% endif %}
+        </div>
+    </div>
+</div>

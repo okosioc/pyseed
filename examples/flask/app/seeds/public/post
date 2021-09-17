@@ -1,0 +1,3 @@
+!layout=pub
+!path_params=[('id', 'ObjectId')]
+post_read

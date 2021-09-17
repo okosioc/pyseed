@@ -1,0 +1,25 @@
+{{ '{% extends "' }}{{ view.layout }}{{ '.html" %}' }}
+{{ '{% block title %}' }}{{ view.title }}{{ '{% endblock %}' }}
+{{ '{% block content %}' }}
+<div class="container-fluid">
+    <div class="row">
+        {% for row in view.rows %}
+            {% for column in row.columns %}
+                <div class="col">
+                    {% if column is string %}
+                        {{ '{%' }} include "seeds/{{ column }}.html" {{ '%}' }}
+                    {% else %}
+                        <div class="row">
+                            {% for col in column %}
+                                <div class="col">
+                                    {{ '{%' }} include "seeds/{{ col }}.html" {{ '%}' }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+{{ '{% endblock %}' }}

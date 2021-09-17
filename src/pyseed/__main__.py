@@ -15,6 +15,7 @@ from typing import List, Tuple, Any
 from importlib_metadata import version, entry_points
 
 import pyseed
+from pyseed.log import configure_logger
 
 
 def list_dependencies_and_versions() -> List[Tuple[str, str]]:
@@ -43,6 +44,11 @@ def main() -> Any:
         version="%(prog)s version {} ({})".format(pyseed.__version__, dep_versions()),
     )
     parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Print debug information',
+    )
+    parser.add_argument(
         "command",
         choices=['gen', ],
     )
@@ -52,6 +58,9 @@ def main() -> Any:
         nargs=argparse.REMAINDER,
     )
     parsed_args = parser.parse_args(argv)
+    # Setup logger
+    configure_logger(stream_level='DEBUG' if parsed_args.verbose else 'INFO')
+    # Execute command
     command = registered_commands[parsed_args.command].load()
     return command(parsed_args.args)
 

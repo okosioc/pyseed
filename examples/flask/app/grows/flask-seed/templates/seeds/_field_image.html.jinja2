@@ -1,0 +1,58 @@
+<div class="form-group" name="{{ field_path }}">
+    <label>{{ field_schema.title }}</label>
+    {% if field_schema.type == 'array' %} {# array of string/object #}
+        {% set hiddens = field_schema['items'].properties|keys if field_schemaz['items'].type == 'object' else ['url'] %}
+    {% elif field_schema.type == 'string' %} {# string #}
+        {% set hiddens = ['url'] %}
+    {% endif %}
+    <div class="plupload-input-group image-input-group" {{ 'required' if field_schema.required }}>
+        <a class="btn btn-primary plupload" href="javascript:;"
+                {{ 'multiple' if field_schema.type == 'array' }}
+           data-token="{{ '{{ upload_config.token }}' }}"
+           data-upload="{{ '{{ upload_config.endpoint }}' }}"
+           data-max="{{ '{{ upload_config.max }}' }}"
+           data-preview='{"image":"{{ '{{' }} upload_config.image_preview_sm {{ '}}' }}", "video":"{{ '{{' }} upload_config.video_poster_sm {{ '}}' }}"}'
+           data-filters='{"mime_types":"{{ '{{' }} upload_config.mimes_image|join(", ") {{ '}}' }}"}'
+           data-hiddens="{{ hiddens|join(',') }}">Choose Image...</a>
+        <small class="form-text">Support {{ '{{' }} upload_config.mimes_image|join(', ') {{ '}}' }}.
+        </small>
+        <div class="plupload-input-result image-input-result mt-1 clearfix">
+            {% if field_schema.type == 'array' %}
+                {% if jschema['items'].type == 'object' %} {# object array #}
+                    {{ '{%' }} for e in {{ field_path }} {{ '%}' }}
+                    {% call(k) render_image(hiddens) -%}
+                        {{ '{{' }} e['{{ k }}'] {{ '}}' }}
+                    {%- endcall %}
+                    {{ '{%' }} endfor {{ '%}' }}
+                {% else %} {# string array #}
+                    {{ '{%' }} for e in {{ field_path }} {{ '%}' }}
+                    {{ '{%' }} set image_obj = {'url': e } {{ '%}' }}
+                    {% call(k) render_image(hiddens) -%}
+                        {{ '{{' }} image_obj['{{ k }}'] {{ '}}' }}
+                    {%- endcall %}
+                    {{ '{%' }} endfor {{ '%}' }}
+                {% endif %}
+            {% else %}
+                {{ '{%' }} if {{ field_path }} {{ '%}' }}
+                {{ '{%' }} set image_obj = {'url': {{ field_path }} } {{ '%}' }}
+                {% call(k) render_image(hiddens) -%}
+                    {{ '{{' }} image_obj['{{ k }}'] {{ '}}' }}
+                {%- endcall %}
+                {{ '{%' }} endif {{ '%}' }}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% macro render_image(hiddens) %}
+    <div class="image uploaded" style="width: auto">
+        <img data-src="{{ caller('url') }}">
+        <div class="btns">
+            <a href="{{ caller('url') }}" target="_blank">i</a>
+            <a href="javascript:;" onclick="$(this).closest('.image').remove();">x</a>
+        </div>
+        {% for k in hiddens %}
+            <input type="hidden" name="{{ k }}" value="{{ caller(k) }}">
+        {% endfor %}
+    </div>
+{% endmacro %}
