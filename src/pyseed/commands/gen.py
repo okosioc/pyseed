@@ -86,32 +86,28 @@ def _prepare_jinja2_env():
     return env
 
 
-def _gen(models_dir: str, seeds_dir: str, grows_dir: str, template_names: List[str]):
+def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str]):
     """ Gen. """
-    logger.info(f'gen {models_dir} and {seeds_dir} to {grows_dir}, using {template_names}')
+    logger.info(f'gen {models_dir} and {seeds_dir} to {out_dir}, using {template_names}')
     if not os.path.exists(models_dir):
         logger.error('No models folder')
         return False
     if not os.path.exists(seeds_dir):
         logger.error('No seeds folder')
         return False
-    if not os.path.exists(grows_dir):  # TODO: Should download templates to grows dir firstly
-        logger.error('No grows folder')
-        return False
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir)
     #
-    # Reset grows folder
+    # find templates from current folder
+    # TODO: Download template to current working folder
     #
+    working_folder = os.getcwd()
+    logger.info(f'Working folder is {working_folder}')
     templates = []
-    for g in os.listdir(grows_dir):
-        p = os.path.join(grows_dir, g)
-        if os.path.isdir(p):
-            if g.startswith('.'):  # Skip the download templates folder
-                if g[1:] in template_names:
-                    templates.append(g[1:])
-            else:
-                shutil.rmtree(p)
-        else:
-            os.remove(p)
+    for g in os.listdir(working_folder):
+        p = os.path.join(working_folder, g)
+        if os.path.isdir(p) and g.startswith('.') and g[1:] in template_names:
+            templates.append(g[1:])
     #
     if not templates:
         logger.error(f'Can not find any available templates by {template_names}')
@@ -206,9 +202,10 @@ def _gen(models_dir: str, seeds_dir: str, grows_dir: str, template_names: List[s
         #
         # Prepare paths
         #
-        tempate_path = os.path.normpath(os.path.join(grows_dir, f'.{template}'))
-        output_path = os.path.normpath(os.path.join(grows_dir, template))
-        os.mkdir(output_path)
+        tempate_path = f'.{template}'
+        output_path = out_dir
+        if not os.path.exists(output_path):
+            os.mkdir(output_path)
         logger.info(f'Generate template {template}: {tempate_path} -> {output_path}')
         #
         # Use depth-first to copy templates to output path, converting all the names and render in the meanwhile
@@ -253,7 +250,7 @@ def _recursive_render(t_base, o_base, name, context, env):
       {{seed}}
     """
     t_path = os.path.join(t_base, name)
-    logger.debug(f'{t_path}')
+    logger.debug(f'template {t_path}')
     t_name = ''.join(name.split())  # Remove all the whitespace chars from name
     out_names = []
     out_key, out_values = None, []
@@ -302,26 +299,34 @@ def _recursive_render(t_base, o_base, name, context, env):
     if os.path.isdir(t_path):
         for i, o_name in enumerate(out_names):
             o_path = os.path.join(o_base, o_name)
-            logger.debug(f'-> {o_path}')
-            os.mkdir(o_path)
+            logger.debug(f'output {o_path}')
+            if not os.path.exists(o_path):
+                os.mkdir(o_path)
             # Can use this in sub folders and files
             if out_values:
                 context[out_key] = out_values[i]
             # Copy the whole folder, use sorted() to make sure files starting with _ can be copied firtly
             for d in sorted(os.listdir(t_path)):
                 _recursive_render(t_path, o_path, d, context, env)
+            # Remove the files startswith #, which has been used for rendering
+            for f in os.listdir(o_path):
+                fp = os.path.join(o_path, f)
+                if os.path.isfile(fp) and f.startswith('#'):
+                    logger.debug(f'delete {f}')
+                    os.remove(fp)
+            logger.debug(f'done {o_path}')
     #
     else:
         for o_name in out_names:
             o_path = os.path.join(o_base, o_name)
-            logger.debug(f'-> {o_path}')
+            logger.debug(f'copy {o_name}')
             shutil.copyfile(t_path, o_path)
             shutil.copymode(t_path, o_path)
         #
         # Render file
         # 1. Change working folder to ., so that jinja2 works ok
-        # 1. File name that starts with _ will be include for rendering, so no need to render
-        # 2. File name with jinja2 ext will be rendered
+        # 2. Files with name starts with # will be include for rendering, so no need to render
+        # 3. Files with name ends with jinja2 will be render
         #
         o_base = os.path.abspath(o_base)
         with work_in(o_base):
@@ -330,8 +335,11 @@ def _recursive_render(t_base, o_base, name, context, env):
             o_context = {k: v for k, v in context.items() if not k.startswith('__')}
             #
             for i, o_name in enumerate(out_names):
-                if o_name.startswith('_') or not o_name.endswith('jinja2'):
+                if o_name.startswith('#') or not o_name.endswith('.jinja2'):
                     continue
+                #
+                o_file = o_name.replace('.jinja2', '')
+                logger.debug(f'render {o_file}')
                 # Remove __ so that object can be accessed in template
                 if out_values:
                     o_context[out_key[2:]] = out_values[i]
@@ -342,7 +350,7 @@ def _recursive_render(t_base, o_base, name, context, env):
                     exception.translated = False
                     raise
                 rendered = tmpl.render(**o_context)
-                o_file = os.path.join(o_base, o_name.replace('.jinja2', ''))
+                #
                 with open(o_file, 'w', encoding='utf-8') as f:
                     f.write(rendered)
                 # Remove template file
@@ -353,27 +361,31 @@ def main(args: List[str]) -> bool:
     """ Main. """
     parser = argparse.ArgumentParser(prog="pyseed gen")
     parser.add_argument(
-        "models",
+        "-m",
         nargs='?',
+        metavar='models',
         default='./models',
         help="Specify the models folder, default value is ./models",
     )
     parser.add_argument(
-        "seeds",
+        "-s",
         nargs='?',
+        metavar='seeds',
         default='./seeds',
         help="Specify the seeds folder, default value is ./seeds",
     )
     parser.add_argument(
-        "grows",
+        "-o",
         nargs='?',
+        metavar='output',
         default='./grows',
         help="Specify the generation output folder, default value is ./grows",
     )
     parser.add_argument(
-        "templates",
+        "-t",
         nargs='+',
+        metavar='templates',
         help="Specify the templates",
     )
     parsed_args = parser.parse_args(args)
-    return _gen(parsed_args.models, parsed_args.seeds, parsed_args.grows, parsed_args.templates)
+    return _gen(parsed_args.m, parsed_args.s, parsed_args.o, parsed_args.t)

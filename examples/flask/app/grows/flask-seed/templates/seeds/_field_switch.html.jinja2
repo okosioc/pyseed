@@ -1,9 +1,0 @@
-<div class="form-group" name="{{ field_path }}">
-    <label>{{ field_schema.title }}</label>
-    <div class="custom-control custom-switch">
-        <input type="checkbox" class="custom-control-input" name="{{ field_path }}"
-        {{ 'required' if field_schema.required }} {{ '{{' }} 'checked' if {{ field_path }} == true {{ '}}' }}
-        >
-        <label class="custom-control-label"></label>
-    </div>
-</div>
