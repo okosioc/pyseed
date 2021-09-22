@@ -1,7 +1,7 @@
-<div class="form-group" name="{{ field_path }}">
+<div class="form-group" name="{{ field_name }}">
     <label>{{ field_schema.title }}</label>
     <div class="custom-control custom-switch">
-        <input type="checkbox" class="custom-control-input" name="{{ field_path }}"
+        <input type="checkbox" class="custom-control-input" name="{{ field_name }}"
         {{ 'required' if field_schema.required }} {{ '{{' }} 'checked' if {{ field_path }} == true {{ '}}' }}
         >
         <label class="custom-control-label"></label>

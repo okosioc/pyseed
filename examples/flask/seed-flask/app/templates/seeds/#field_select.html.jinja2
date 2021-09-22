@@ -1,8 +1,8 @@
-<div class="form-group" name="{{ field_path }}">
+<div class="form-group {{ field_schema.type }}" name="{{ field_name }}">
     <label>{{ field_schema.title }}</label>
     {% if field_schema.type == 'array' %}
     {% if field_schema['items'].enum %}
-    <select class="custom-select select2" name="{{ field_path }}" {{ 'required' if field_schema.required }}
+    <select class="custom-select select2" name="{{ field_name }}" {{ 'required' if field_schema.required }}
             multiple>
         <option value="">Choose...</option>
         {% for value, label in field_schema['items'].enum_titles|items %}
@@ -10,7 +10,7 @@
         {% endfor %}
     </select>
     {% else %}
-    <select class="custom-select select2" name="{{ field_path }}" {{ 'required' if field_schema.required }}
+    <select class="custom-select select2" name="{{ field_name }}" {{ 'required' if field_schema.required }}
             multiple tags>
         {{ '{%' }} for value in {{ field_path }} {{ '%}' }}
         <option value="{{ '{{' }} value {{ '}}' }}" selected>{{ '{{' }} value {{ '}}' }}</option>
@@ -18,7 +18,7 @@
     </select>
     {% endif %}
     {% else %}
-    <select class="custom-select select2" name="{{ field_path }}" {{ 'required' if field_schema.required }}>
+    <select class="custom-select select2" name="{{ field_name }}" {{ 'required' if field_schema.required }}>
         <option value="">Choose...</option>
         {% for value, label in field_schema.enum_titles|items %}
         <option value="{{ value }}" {{ '{{' }} 'selected' if {{ value|quote }}=={{ field_path }} {{ '}}' }}>{{ label }}</option>

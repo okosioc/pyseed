@@ -1,27 +1,49 @@
-{% macro render_schema(name, schema, base='') %}
+{% macro render_schema(name, schema, base='', is_in_list=false) %}
 {% set path = base + '.' + name if base else name %}
 {% if schema.type == 'object' %}
-{% for row in schema.layout %}
-{% if row|length == 1 and row[0] == '-' %}
-    <hr class="mt-4 mb-5">
-{% else %}
-    <div class="row">
-        {% for col in row %}
-        <div class="col">
-            {{ render_schema(col, schema.properties[col], path)|indent(12) }}
+    <fieldset class="object {{ 'mb-0' if is_in_list }}" name="{{ name }}">
+    {% for row in schema.layout %}
+    {% if row|length == 1 and row[0] == '-' %}
+        <hr class="mt-4 mb-5">
+    {% else %}
+        <div class="row">
+            {% for col in row %}
+            <div class="col">
+                {{ render_schema(col, schema.properties[col], path)|indent(16) }}
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-    </div>
-{% endif %}
-{% endfor %}
+    {% endif %}
+    {% endfor %}
+    </fieldset>
 {% elif schema.type == 'array' %}
-{% if schema['items'].format in ['select', 'image', 'file', 'avatar'] %}
+{% if schema['items'].format in ['select', 'image', 'file'] %}
+    {% set field_name = name %}
     {% set field_schema = schema %}
     {% set field_path = path %}
     {% include '#field_'+ field_schema['items'].format + '.html.jinja2' %}
+{% elif schema['items'].format == 'table' %}
+    TODO: table
+{% elif schema['items'].format == 'tab' %}
+    TODO: tab
+{% elif schema['items'].format == 'card' %}
+    TODO: card
 {% else %}
+    <fieldset class="array {{ 'mb-0' if is_in_list }}" name="{{ name }}">
+        <div class="list-group list-group-flush">
+            {{ '{%' }} for e in {{ path }} {{ '%}' }}
+            <div class="list-group-item">
+                {{ render('{{ loop.index0 }}', schema['items'], 'e', is_in_list=true) }}
+            </div>
+            {{ '{%' }} endfor {{ '%}' }}
+            <div class="list-group-item template"> {# Template form for adding elements to array #}
+                {{ render('-', schema['items'], name, is_in_list=true) }}
+            </div>
+        </div>
+    </fieldset>
 {% endif %}
 {% else %}
+    {% set field_name = name %}
     {% set field_schema = schema %}
     {% set field_path = path %}
     {% include '#field_'+ field_schema.format + '.html.jinja2' %}

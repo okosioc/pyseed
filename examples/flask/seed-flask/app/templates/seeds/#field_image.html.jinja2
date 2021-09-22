@@ -1,4 +1,4 @@
-<div class="form-group" name="{{ field_path }}">
+<div class="form-group {{ field_schema.type }}" name="{{ field_name }}">
     <label>{{ field_schema.title }}</label>
     {% if field_schema.type == 'array' %} {# array of string/object #}
         {% set hiddens = field_schema['items'].properties|keys if field_schemaz['items'].type == 'object' else ['url'] %}
