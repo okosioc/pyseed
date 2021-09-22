@@ -7,7 +7,6 @@ from flask_login import current_user
 from pyseed import populate_model, populate_search
 from .common import get_id
 from app.tools import auth_permission
-from .. import models
 
 public = Blueprint('public', __name__)
 

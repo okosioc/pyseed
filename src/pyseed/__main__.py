@@ -20,10 +20,10 @@ from pyseed.log import configure_logger
 
 def list_dependencies_and_versions() -> List[Tuple[str, str]]:
     deps = (
-        "importlib_metadata",
-        "pkginfo",
         "flask",
         "pymongo",
+        "importlib_metadata",
+        "inflection",
     )
     return [(dep, version(dep)) for dep in deps]
 

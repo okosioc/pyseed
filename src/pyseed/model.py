@@ -130,8 +130,7 @@ class Format(SimpleEnum):
     IMAGE = 'image'  # Image upload support
     AVATAR = 'avatar'  # User avatar
     FILE = 'file'  # File upload support
-    IPV4 = 'ipv4'
-    IPV6 = 'ipv6'
+    IP = 'IP'
     OBJECTID = 'objectid'  # Default format for ObjectId
     CHECKBOX = 'checkbox'  # Default format for bool
     SWITCH = 'switch'

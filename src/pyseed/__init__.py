@@ -17,5 +17,5 @@ from .model import SimpleEnumMeta, SimpleEnum, Format, Comparator, DATETIME_FORM
 from .admin import register, registered_models
 from .mongosupport import MongoModel, connect, populate_model, populate_search
 
-metadata = importlib_metadata.metadata("twine")
+metadata = importlib_metadata.metadata("py3seed")
 __version__ = metadata["version"]

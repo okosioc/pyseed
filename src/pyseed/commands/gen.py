@@ -106,8 +106,8 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
     templates = []
     for g in os.listdir(working_folder):
         p = os.path.join(working_folder, g)
-        if os.path.isdir(p) and g.startswith('.') and g[1:] in template_names:
-            templates.append(g[1:])
+        if os.path.isdir(p) and g in template_names:
+            templates.append(g)
     #
     if not templates:
         logger.error(f'Can not find any available templates by {template_names}')
@@ -202,7 +202,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
         #
         # Prepare paths
         #
-        tempate_path = f'.{template}'
+        tempate_path = template
         output_path = out_dir
         if not os.path.exists(output_path):
             os.mkdir(output_path)

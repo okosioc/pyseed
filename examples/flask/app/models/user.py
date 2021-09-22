@@ -12,7 +12,7 @@
 from datetime import datetime
 from typing import List
 
-from pyseed import SimpleEnum, register, MongoModel, ModelField as Field, Format
+from pyseed import SimpleEnum, register, MongoModel, ModelField as Field, Format, BaseModel
 
 
 class UserRole(SimpleEnum):
@@ -28,6 +28,18 @@ class UserStatus(SimpleEnum):
     REJECTED = 'rejected'
 
 
+class LastLogin(BaseModel):
+    """ Last login of curernt user. """
+    ip: str = Field(format_=Format.IP, required=False)
+    location: str = Field(required=False)
+    time: datetime
+
+    __layout__ = '''
+    ip, location
+    time
+    '''
+
+
 @register
 class User(MongoModel):
     """ User definition. """
@@ -38,6 +50,8 @@ class User(MongoModel):
     password: str = Field(format_=Format.PASSWORD)
     intro: str = Field(format_=Format.TEXTAREA, required=False)
     avatar: str = Field(format_=Format.AVATAR, required=False)
+    #
+    last_login: LastLogin = Field(required=False)
     #
     update_time: datetime = None
     create_time: datetime = datetime.now
