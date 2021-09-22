@@ -18,6 +18,41 @@ def home():
     return render_template('dashboard/home.html')
 
 
+@dashboard.route('/audit')
+@auth_permission
+def audit():
+    """ Get. """
+    id_ = get_id()
+    if id_:
+        user = User.find_one(id_)
+        if not user:
+            abort(404)
+    else:
+        user = User()
+    #
+    return render_template('dashboard/audit.html', user=user)
+
+
+@dashboard.route('/audit/user.last_login-form', methods=('POST',))
+@auth_permission
+def audit_user.last_login-form():
+    """ Post. """
+    user = populate_model(request.form, User)
+    id_ = get_id()
+    if not id_:  # Create
+        user.save()
+        id_ = user._id
+        current_app.logger.info(f'Successfully create User: {id_}')
+    else:  # Update
+        existing = User.find_one(id_)
+        if not existing:
+            abort(404)
+        # TODO: Update fields in layout
+        existing.updateTime = datetime.now()
+        existing.save()
+        current_app.logger.info(f'Successfully update User {id_}')
+    #
+    return jsonify(error=0, message=f'Save User successfully.', id=id_)
 @dashboard.route('/profile')
 @auth_permission
 def profile():
@@ -33,9 +68,9 @@ def profile():
     return render_template('dashboard/profile.html', user=user)
 
 
-@dashboard.route('/profile/user_form', methods=('POST',))
+@dashboard.route('/profile/user-form', methods=('POST',))
 @auth_permission
-def profile_user_form():
+def profile_user-form():
     """ Post. """
     user = populate_model(request.form, User)
     id_ = get_id()

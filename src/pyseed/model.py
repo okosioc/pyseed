@@ -112,7 +112,7 @@ class Format(SimpleEnum):
     https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#data-types
     https://swagger.io/docs/specification/data-models/data-types/
     """
-    DATETIME = 'date-time'  # Default format for datetime
+    DATETIME = 'datetime'  # Default format for datetime
     DATE = 'date'
     PASSWORD = 'password'
     BYTE = 'byte'
@@ -130,7 +130,7 @@ class Format(SimpleEnum):
     IMAGE = 'image'  # Image upload support
     AVATAR = 'avatar'  # User avatar
     FILE = 'file'  # File upload support
-    IP = 'IP'
+    IP = 'ip'
     OBJECTID = 'objectid'  # Default format for ObjectId
     CHECKBOX = 'checkbox'  # Default format for bool
     SWITCH = 'switch'

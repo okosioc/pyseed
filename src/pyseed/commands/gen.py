@@ -227,13 +227,18 @@ def _generate_names(name):
 
 
 def _parse_seed(column, models):
-    """ Parse column and return seed if any, e.g, post_query, post_read, user_form."""
-    tokens = column.split('_')
+    """ Parse column and return seed if any, e.g, post-query, post-read, user-form."""
+    tokens = column.split('-')
     name = tokens[0]
+    includes = None
+    if '.' in name:  # sub model, only support one level sub model
+        inners = name.split('.')
+        name = inners[0]
+        includes = [inners[1]]
     found = next((m for n, m in models.items() if n.lower() == name.lower()), None)
     if found:
         action = tokens[-1]
-        return {'model': found, 'action': action, **_generate_names(column)}
+        return {'model': found, 'includes': includes, 'action': action, **_generate_names(column)}
     else:
         return None
 

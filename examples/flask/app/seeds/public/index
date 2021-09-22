@@ -1,6 +1,6 @@
 !layout=pub
 !title=Index
-block_promos
-block_features
-block_counters
-block_news
+promos
+features
+counters
+news

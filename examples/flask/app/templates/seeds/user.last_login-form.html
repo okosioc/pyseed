@@ -1,0 +1,47 @@
+<div class="card">
+    <div class="card-header">
+        <h4 class="card-header-title">
+            Userform
+        </h4>
+    </div>
+    <div class="card-body">
+<form id="user-form" class="form-editor needs-validation" novalidate method="post">
+    <fieldset class="object " name="user">
+        <div class="row">
+            <div class="col">
+            
+                    <fieldset class="object " name="last_login">
+                        {% set last_login = user.last_login %}
+                        <div class="row">
+                            <div class="col">
+                            <div class="form-group" name="ip">
+                                    <label>IP</label>
+                                    <input name="ip" type="string" class="form-control" 
+                                           value="{{ last_login.ip or '' }}">
+                                </div>
+                            </div>
+                            <div class="col">
+                            <div class="form-group" name="location">
+                                    <label>LOCATION</label>
+                                    <input name="location" type="string" class="form-control" 
+                                           value="{{ last_login.location or '' }}">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col">
+                            <div class="form-group" name="time">
+                                    <label>TIME</label>
+                                    <input name="time" type="string" class="form-control datetime" required
+                                           value="{{ last_login.time or '' }}">
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
+
+            </div>
+        </div>
+    </fieldset>
+</form>
+    </div>
+</div>

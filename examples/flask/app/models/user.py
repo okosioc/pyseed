@@ -30,7 +30,7 @@ class UserStatus(SimpleEnum):
 
 class LastLogin(BaseModel):
     """ Last login of curernt user. """
-    ip: str = Field(format_=Format.IP, required=False)
+    ip: str = Field(required=False)
     location: str = Field(required=False)
     time: datetime
 
@@ -65,4 +65,5 @@ class User(MongoModel):
     status, roles
     password
     intro
+    last_login
     '''

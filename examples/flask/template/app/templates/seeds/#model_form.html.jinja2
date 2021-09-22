@@ -1,7 +1,20 @@
-{% macro render_schema(name, schema, base='', is_in_list=false) %}
-{% set path = base + '.' + name if base else name %}
-{% if schema.type == 'object' %}
+{% macro render_schema(name, schema, parent='', is_in_list=false, includes=[]) %}
+{% set path = parent + '.' + name if parent else name %}
+{% if schema.type == 'object' +%}
     <fieldset class="object {{ 'mb-0' if is_in_list }}" name="{{ name }}">
+    {% if parent and not is_in_list %}
+        {# Inner level fields should define parent variable, so their sub fields\'s path can be access #}
+        {{ '{%' }} set {{ name }} = {{ parent }}.{{ name }} {{ '%}' }}
+    {% endif %}
+    {% if includes %}
+        {% for row in includes %}
+        <div class="row">
+            <div class="col">
+            {{ render_schema(row, schema.properties[row], name)|indent(16) }}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
     {% for row in schema.layout %}
     {% if row|length == 1 and row[0] == '-' %}
         <hr class="mt-4 mb-5">
@@ -9,12 +22,13 @@
         <div class="row">
             {% for col in row %}
             <div class="col">
-                {{ render_schema(col, schema.properties[col], path)|indent(16) }}
+            {{ render_schema(col, schema.properties[col], name)|indent(16) }}
             </div>
             {% endfor %}
         </div>
     {% endif %}
     {% endfor %}
+    {% endif %}
     </fieldset>
 {% elif schema.type == 'array' %}
 {% if schema['items'].format in ['select', 'image', 'file'] %}
@@ -50,5 +64,5 @@
 {% endif %}
 {% endmacro %}
 <form id="{{ model.name_kebab }}-form" class="form-editor needs-validation" novalidate method="post">
-{{- render_schema(model.name_lower, model.schema) -}}
+{{- render_schema(model.name_lower, model.schema, includes=model_includes) -}}
 </form>

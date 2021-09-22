@@ -1,0 +1,106 @@
+<div class="card">
+    <div class="card-header">
+        <h4 class="card-header-title">
+            Userform
+        </h4>
+    </div>
+    <div class="card-body">
+<form id="user-form" class="form-editor needs-validation" novalidate method="post">
+    <fieldset class="object " name="user">
+        <div class="row">
+            <div class="col">
+            TODO
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+            <div class="form-group" name="name">
+                    <label>NAME</label>
+                    <input name="name" type="string" class="form-control" required
+                           value="{{ user.name or '' }}">
+                </div>
+            </div>
+            <div class="col">
+            <div class="form-group" name="email">
+                    <label>EMAIL</label>
+                    <input name="email" type="string" class="form-control" required
+                           value="{{ user.email or '' }}">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+            <div class="form-group string" name="status">
+                    <label>STATUS</label>
+                    <select class="custom-select select2" name="status" required>
+                        <option value="">Choose...</option>
+                        <option value="normal" {{ 'selected' if 'normal'==user.status }}>Normal</option>
+                        <option value="rejected" {{ 'selected' if 'rejected'==user.status }}>Rejected</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col">
+            <div class="form-group array" name="roles">
+                    <label>ROLES</label>
+                    <select class="custom-select select2" name="roles" required
+                            multiple>
+                        <option value="">Choose...</option>
+                        <option value="1" {{ 'selected' if 1 in user.roles }}>Member</option>
+                        <option value="2" {{ 'selected' if 2 in user.roles }}>Editor</option>
+                        <option value="9" {{ 'selected' if 9 in user.roles }}>Admin</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+            TODO
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+            <div class="form-group" name="intro">
+                    <label>INTRO</label>
+                    <textarea name="intro" rows="5"
+                              class="form-control" >{{ user.intro or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+            
+                    <fieldset class="object " name="last_login">
+                        {% set last_login = user.last_login %}
+                        <div class="row">
+                            <div class="col">
+                            <div class="form-group" name="ip">
+                                    <label>IP</label>
+                                    <input name="ip" type="string" class="form-control" 
+                                           value="{{ last_login.ip or '' }}">
+                                </div>
+                            </div>
+                            <div class="col">
+                            <div class="form-group" name="location">
+                                    <label>LOCATION</label>
+                                    <input name="location" type="string" class="form-control" 
+                                           value="{{ last_login.location or '' }}">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col">
+                            <div class="form-group" name="time">
+                                    <label>TIME</label>
+                                    <input name="time" type="string" class="form-control datetime" required
+                                           value="{{ last_login.time or '' }}">
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
+
+            </div>
+        </div>
+    </fieldset>
+</form>
+    </div>
+</div>
