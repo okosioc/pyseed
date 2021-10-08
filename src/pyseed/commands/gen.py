@@ -136,8 +136,8 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
     # 4. Each view file contains var lines, i.e. !key=value, and seed grids
     context = {
         'models': models,  # {name: {name, schema}}}
-        'layouts': [],  # [layouts]
-        'blueprints': [],
+        'layouts': [],  # [layout]
+        'blueprints': [],  # [blueprint]
         'seeds': [],
     }
     logger.info(f'Seeds:')
@@ -147,7 +147,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
             logger.info(f'{d}/')
             blueprint = {'views': [], **_generate_names(d)}
             for dd in os.listdir(p):  # Views
-                view = {'rows': [], 'seeds': [], **_generate_names(dd)}
+                view = {'blueprint': blueprint, 'rows': [], 'seeds': [], **_generate_names(dd)}
                 pp = os.path.join(p, dd)
                 logger.info(f'  {dd}')
                 with open(pp) as f:  # Seeds defined in views
@@ -159,30 +159,37 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
                         key_value_found = re.match('^!([a-zA-Z_]+)=(.+)$', line)
                         if key_value_found:
                             key, value = key_value_found.groups()
-                            # NOTE: Need to make sure the varibles name is not rows/seeds/name/name_xxx
+                            #
+                            # NOTES:
+                            # 1. Variables name should be in snake format, i.e, two_words
+                            # 2. Variables can be accessed in templates, i.e, view.layout
+                            #
+                            value = _parse_varible_value(key, value)
                             view[key] = value
                         else:
                             row = {'columns': []}
-                            if '|' in line:  # Nested column
+                            if '|' in line:  # Nested column, e.g, a,b|c,d
                                 for c in line.split('|'):
                                     column = []
                                     for cc in c.split(','):
                                         cc = cc.strip()
                                         seed = _parse_seed(cc, models)
-                                        if seed:
+                                        if 'model' in seed:
                                             view['seeds'].append(seed)
                                             context['seeds'].append(seed)
-                                        column.append(cc)
+                                        #
+                                        column.append(seed)
                                     #
                                     row['columns'].append(column)
-                            else:  # Single level column
+                            else:  # Single level column, e.g, a,b
                                 for c in line.split(','):
                                     c = c.strip()
                                     seed = _parse_seed(c, models)
-                                    if seed:
+                                    if 'model' in seed:
                                         view['seeds'].append(seed)
                                         context['seeds'].append(seed)
-                                    row['columns'].append(c)
+                                    #
+                                    row['columns'].append(seed)
                             #
                             logger.info(f'    {line}')
                             view['rows'].append(row)
@@ -216,18 +223,43 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
 
 def _generate_names(name):
     """ Generate names. """
+    name_wo_dot = name.replace('.', '-')  # e.g, plan.members-form -> plan-members-form
     return {
         'name': name,  # => SampleModel
         'name_lower': name.lower(),  # => samplemodel
-        'name_kebab': inflection.dasherize(inflection.underscore(name)),  # => sample-model
-        'name_camel': inflection.camelize(name, uppercase_first_letter=False),  # => sampleModel
-        'name_snake': inflection.underscore(name),  # => sample_model
-        'name_snake_plural': inflection.tableize(name)  # => sample_models
+        'name_kebab': inflection.dasherize(inflection.underscore(name_wo_dot)),  # => sample-model
+        'name_camel': inflection.camelize(name_wo_dot, uppercase_first_letter=False),  # => sampleModel
+        'name_snake': inflection.underscore(name_wo_dot),  # => sample_model
+        'name_snake_plural': inflection.tableize(name_wo_dot)  # => sample_models
     }
 
 
+def _parse_varible_value(key, value):
+    """ Parse value accordig to the key. """
+    key = key.lower()
+    value = value.strip()
+    if key.startswith('has_') or key.startswith('is_'):
+        if value.lower() in ['1', 'true', 'yes']:
+            value = True
+        else:
+            value = False
+    #
+    return value
+
+
 def _parse_seed(column, models):
-    """ Parse column and return seed if any, e.g, post-query, post-read, user-form."""
+    """ Parse column and return seed if any, e.g, post-query, post-read, user-form?is_horizontal=true.
+
+    model-action?params
+    """
+    # params
+    params = {}
+    if '?' in column:
+        column, query = column.split('?')
+        for p in query.split('&'):
+            key, value = p.split('=')
+            params[key] = _parse_varible_value(key, value)
+    # model-action
     tokens = column.split('-')
     name = tokens[0]
     includes = None
@@ -238,9 +270,9 @@ def _parse_seed(column, models):
     found = next((m for n, m in models.items() if n.lower() == name.lower()), None)
     if found:
         action = tokens[-1]
-        return {'model': found, 'includes': includes, 'action': action, **_generate_names(column)}
+        return {'model': found, 'includes': includes, 'action': action, 'params': params, **_generate_names(column)}
     else:
-        return None
+        return {'params': params, **_generate_names(column)}
 
 
 def _recursive_render(t_base, o_base, name, context, env):
