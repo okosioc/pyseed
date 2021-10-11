@@ -262,15 +262,15 @@ def _parse_seed(column, models):
     # model-action
     tokens = column.split('-')
     name = tokens[0]
-    includes = None
-    if '.' in name:  # sub model, only support one level sub model
-        inners = name.split('.')
-        name = inners[0]
-        includes = [inners[1]]
+    sub = None
+    # sub model, only support one level sub model
+    if '.' in name:
+        name, sub = name.split('.')
+    # found model by name
     found = next((m for n, m in models.items() if n.lower() == name.lower()), None)
     if found:
         action = tokens[-1]
-        return {'model': found, 'includes': includes, 'action': action, 'params': params, **_generate_names(column)}
+        return {'model': found, 'sub': sub, 'action': action, 'params': params, **_generate_names(column)}
     else:
         return {'params': params, **_generate_names(column)}
 
