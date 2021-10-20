@@ -257,17 +257,15 @@ class ModelField:
         """
         self.name = name
         self.type = type_
+        # default is none if undefined
         if default is Undefined:
             self.default = None
-            self.required = True
-        elif default is None:
-            self.default = None
-            self.required = False
         else:
             self.default = default
+        # required is true if undefined
+        if required is Undefined:
             self.required = True
-        # Overwrite calcuated required if specified
-        if required is not Undefined:
+        else:
             self.required = required
         self.format = format_
         self.title = title

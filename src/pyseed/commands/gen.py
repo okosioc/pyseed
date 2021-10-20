@@ -11,6 +11,7 @@
 
 import argparse
 import importlib.util
+import json
 import logging
 import os
 import re
@@ -36,8 +37,9 @@ def _prepare_jinja2_env():
     # For more env setting, please refer to https://jinja.palletsprojects.com/en/3.0.x/api/#jinja2.Environment
     #   trim_blocks=True, the first newline after a block is removed (block, not variable tag!)
     #   lstrip_blocks=True, leading spaces and tabs are stripped from the start of a line to a block
+    #   keep_trailing_newline=True, Preserve the trailing newline when rendering templates.
     #
-    env = Environment(trim_blocks=True, lstrip_blocks=True)
+    env = Environment(trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True)
 
     def split(value, separator):
         """ Split a string. """
@@ -146,6 +148,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
         if os.path.isdir(p):
             logger.info(f'{d}/')
             blueprint = {'views': [], **_generate_names(d)}
+            models_by_name = {}
             for dd in os.listdir(p):  # Views
                 view = {'blueprint': blueprint, 'rows': [], 'seeds': [], **_generate_names(dd)}
                 pp = os.path.join(p, dd)
@@ -175,6 +178,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
                                         cc = cc.strip()
                                         seed = _parse_seed(cc, models)
                                         if 'model' in seed:
+                                            models_by_name[seed['model']['name']] = seed['model']
                                             view['seeds'].append(seed)
                                             context['seeds'].append(seed)
                                         #
@@ -186,6 +190,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
                                     c = c.strip()
                                     seed = _parse_seed(c, models)
                                     if 'model' in seed:
+                                        models_by_name[seed['model']['name']] = seed['model']
                                         view['seeds'].append(seed)
                                         context['seeds'].append(seed)
                                     #
@@ -195,6 +200,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
                             view['rows'].append(row)
                 #
                 blueprint['views'].append(view)
+                blueprint['models'] = models_by_name.values()
             #
             context['blueprints'].append(blueprint)
         else:
@@ -230,7 +236,8 @@ def _generate_names(name):
         'name_kebab': inflection.dasherize(inflection.underscore(name_wo_dot)),  # => sample-model
         'name_camel': inflection.camelize(name_wo_dot, uppercase_first_letter=False),  # => sampleModel
         'name_snake': inflection.underscore(name_wo_dot),  # => sample_model
-        'name_snake_plural': inflection.tableize(name_wo_dot)  # => sample_models
+        'name_snake_plural': inflection.tableize(name_wo_dot),  # => sample_models
+        'name_title': inflection.titleize(name_wo_dot),  # => Sample Model
     }
 
 
@@ -243,6 +250,11 @@ def _parse_varible_value(key, value):
             value = True
         else:
             value = False
+    elif value.startswith('[') or value.startswith('{'):
+        try:
+            value = json.loads(value)
+        except ValueError as e:
+            logger.warning(f'Found invalid view varible {key}={value}')
     #
     return value
 
