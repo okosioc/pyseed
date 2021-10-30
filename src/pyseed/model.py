@@ -401,7 +401,7 @@ class ModelMeta(ABCMeta):
                     field.required = False
                 # Define a ModelField directly
                 elif isinstance(value, ModelField):
-                    # x6
+                    # x7
                     field.default = value.default
                     field.required = value.required
                     field.format = value.format
@@ -618,6 +618,9 @@ class BaseModel(metaclass=ModelMeta):
     def __str__(self):
         return f'{self.__class__.__name__}{self.dict()}'
 
+    def __repr__(self):
+        return f'{self.dict()}'
+
     @classmethod
     def get_type(cls, path):
         """ Get type of a path.
@@ -765,8 +768,8 @@ class BaseModel(metaclass=ModelMeta):
           - add type date
           - Add format to array, so that we can gen a component for the whole array
           - Add searchables to root object, so that it can be used to generate search form
-          - Add sortables to root object, so that it can be used to generate order drowpdown
-          - Add columns to root object, so that it can be used to generate columns for table
+          - Add sortables to object, so that it can be used to generate order drowpdown
+          - Add columns to object, so that it can be used to generate columns for table
         """
 
         def _gen_schema(type_: Type):
@@ -800,7 +803,8 @@ class BaseModel(metaclass=ModelMeta):
                         })
                     # built-in type, SimpleEnum or sub model
                     else:
-                        field_schema.update(_gen_schema(f_t.type))
+                        inner_type = _gen_schema(f_t.type)
+                        field_schema.update(inner_type)
                     # default
                     if f_t.default:
                         # Skip if default is callable, e.g, datetime.now
@@ -833,6 +837,8 @@ class BaseModel(metaclass=ModelMeta):
                     'type': 'object',
                     'properties': properties,
                     'required': required,
+                    'columns': type_.__columns__ if type_.__columns__ else required,
+                    'sortables': type_.__sortables__ if type_.__sortables__ else [],
                     'py_type': type_.__name__,
                 }
                 # layout
@@ -869,10 +875,6 @@ class BaseModel(metaclass=ModelMeta):
         searchables = [('%s__%s' % s if isinstance(s, tuple) else s) for s in cls.__searchables__]
         if searchables:
             ret['searchables'] = searchables
-        if cls.__sortables__:
-            ret['sortables'] = cls.__sortables__
-        #
-        ret['columns'] = cls.__columns__ if cls.__columns__ else ret['required']
         #
         # print(json.dumps(ret))
         return ret

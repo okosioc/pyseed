@@ -374,7 +374,7 @@ def _recursive_render(t_base, o_base, name, context, env):
         #
         # Render file
         # 1. Change working folder to ., so that jinja2 works ok
-        # 2. Files with name starts with # will be include for rendering, so no need to render
+        # 2. Files with name starts with # will be include for rendering, so NO need to render
         # 3. Files with name ends with jinja2 will be render
         #
         o_base = os.path.abspath(o_base)
