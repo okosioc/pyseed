@@ -252,9 +252,9 @@ def _parse_varible_value(key, value):
             value = False
     elif value.startswith('[') or value.startswith('{'):
         try:
-            value = json.loads(value)
+            value = json.loads(value)  # Need to use double quotes for string values or key names
         except ValueError as e:
-            logger.warning(f'Found invalid view varible {key}={value}')
+            logger.warning(f'Can not parse list or dict varible {key}={value}, use as string directly')
     #
     return value
 

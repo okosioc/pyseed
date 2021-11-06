@@ -134,6 +134,7 @@ class Format(SimpleEnum):
     OBJECTID = 'objectid'  # Default format for ObjectId
     CHECKBOX = 'checkbox'  # Default format for bool
     SWITCH = 'switch'
+    HIDDEN = 'hidden'  # Hidden input
     # Below values are used for inner model/dict or list of model/dict
     LIST = 'list'  # Default format for List
     TAB = 'tab'
