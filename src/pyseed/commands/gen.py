@@ -129,6 +129,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
     models = {}
     for m in registered_models:
         models[m.__name__] = {'schema': m.schema(), **_generate_names(m.__name__)}
+    #
     logger.info(f'Found {len(models)} registered models: {list(models.keys())}')
     #
     # Create context using contents in seeds_dir

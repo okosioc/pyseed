@@ -141,6 +141,8 @@ class Format(SimpleEnum):
     TABLE = 'table'
     CARD = 'card'
     CAROUSEL = 'carousel'
+    CHART = 'chart'  # Object{title, names, values}
+    STATISTIC = 'statistic'  # Simple value or List[value] or List[{name, value}]
     COLLAPSE = 'collapse'
     CASCADER = 'cascader'  # Cascade selection, i.e, List[str]
     LATLNG = 'latlng'  # LatLng chooser, i.e, List[float]
@@ -852,7 +854,7 @@ class BaseModel(metaclass=ModelMeta):
                             continue
                         layout.append([x.strip() for x in r.split(',')])
                 else:
-                    layout = properties.keys()
+                    layout = [[f] for f in properties.keys()]  # Each field has one row
                 #
                 obj['layout'] = layout
                 #
