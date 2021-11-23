@@ -456,6 +456,7 @@ class BaseModel(metaclass=ModelMeta):
     __doc__ = ''
 
     # TODO: Validate below fields
+    __title__ = None
     __searchables__ = []
     __columns__ = []
     __sortables__ = []
@@ -875,6 +876,7 @@ class BaseModel(metaclass=ModelMeta):
         #
         ret = _gen_schema(cls)
         # Root level properties
+        ret['title'] = cls.__title__ if cls.__title__ else cls.__name__.upper()
         searchables = [('%s__%s' % s if isinstance(s, tuple) else s) for s in cls.__searchables__]
         if searchables:
             ret['searchables'] = searchables

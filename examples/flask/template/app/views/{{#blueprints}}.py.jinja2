@@ -38,7 +38,8 @@ def {{ view.name_snake }}():
     #
     return render_template('{{ blueprint.name_snake }}/{{ view.name_snake }}.html', {{ model.name_snake }}={{ model.name_snake }})
     {% elif action == 'query' %}
-    search, condition, page, sort = populate_search(request.args, {{ model.name }})
+    page, sort = request.args.get('p', 1, lambda x: int(x) if x.isdigit() else 1), [('create_time', pymongo.DESCENDING)]
+    search, condition = populate_search(request.args, {{ model.name }})
     {{ model.name_snake_plural }}, pagination = {{ model.name }}.search(condition, page, sort=sort)
     return render_template('{{ blueprint.name_snake }}/{{ view.name_snake }}.html',
                            search=search, pagination=pagination,
