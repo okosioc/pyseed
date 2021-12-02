@@ -139,6 +139,7 @@ class Format(SimpleEnum):
     LIST = 'list'  # Default format for List
     TAB = 'tab'
     TABLE = 'table'
+    MODAL = 'modal'
     CARD = 'card'
     CAROUSEL = 'carousel'
     CHART = 'chart'  # Object{title, names, values}

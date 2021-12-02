@@ -82,7 +82,13 @@ def _prepare_jinja2_env():
             args[key] = value
         return '{}?{}'.format(request.path, url_encode(args))
 
+    def new_model(class_name):
+        """ New a model by class name. """
+        klass = globals()[class_name]
+        return klass()
+
     env.globals['update_query'] = update_query
+    env.globals['new_model'] = new_model
 
     #
     return env
@@ -151,7 +157,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
             blueprint = {'views': [], **_generate_names(d)}
             models_by_name = {}
             for dd in os.listdir(p):  # Views
-                view = {'blueprint': blueprint, 'rows': [], 'seeds': [], **_generate_names(dd)}
+                view = {'blueprint': blueprint, 'rows': [], 'seeds': [], 'params': {}, **_generate_names(dd)}
                 pp = os.path.join(p, dd)
                 logger.info(f'  {dd}')
                 with open(pp) as f:  # Seeds defined in views
@@ -166,10 +172,10 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
                             #
                             # NOTES:
                             # 1. Variables name should be in snake format, i.e, two_words
-                            # 2. Variables can be accessed in templates, i.e, view.layout
+                            # 2. Variables can be accessed in templates through view.params
                             #
                             value = _parse_varible_value(key, value)
-                            view[key] = value
+                            view['params'][key] = value
                         else:
                             row = {'columns': []}
                             if '|' in line:  # Nested column, e.g, a,b|c,d

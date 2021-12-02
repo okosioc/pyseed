@@ -280,7 +280,6 @@ class MongoModel(BaseModel):
         elif len(args) > 0:
             filter.update(args.pop(0))
         filter.update({'_id': {'$in': ids}})
-
         records = list(cls.find(filter, *args, **kwargs))
         records.sort(key=lambda i: ids.index(i._id))
         return records
