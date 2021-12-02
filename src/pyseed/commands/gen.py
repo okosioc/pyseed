@@ -172,7 +172,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
                             #
                             # NOTES:
                             # 1. Variables name should be in snake format, i.e, two_words
-                            # 2. Variables can be accessed in templates through view.params
+                            # 2. Variables can be accessed in templates by view.params.field_name
                             #
                             value = _parse_varible_value(key, value)
                             view['params'][key] = value

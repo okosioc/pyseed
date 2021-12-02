@@ -845,6 +845,7 @@ class BaseModel(metaclass=ModelMeta):
                     'columns': type_.__columns__ if type_.__columns__ else required,
                     'sortables': type_.__sortables__ if type_.__sortables__ else [],
                     'py_type': type_.__name__,
+                    'title': type_.__title__ if type_.__title__ else type_.__name__.upper()
                 }
                 # layout
                 layout = []
@@ -877,7 +878,6 @@ class BaseModel(metaclass=ModelMeta):
         #
         ret = _gen_schema(cls)
         # Root level properties
-        ret['title'] = cls.__title__ if cls.__title__ else cls.__name__.upper()
         searchables = [('%s__%s' % s if isinstance(s, tuple) else s) for s in cls.__searchables__]
         if searchables:
             ret['searchables'] = searchables
