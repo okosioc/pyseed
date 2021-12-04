@@ -14,7 +14,7 @@ import sys
 from abc import ABCMeta
 from copy import deepcopy
 from datetime import datetime
-from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, Set, Any, ForwardRef, List, get_type_hints
+from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, Set, Any, ForwardRef, List
 
 from bson import ObjectId
 
@@ -451,9 +451,10 @@ class ModelMeta(ABCMeta):
         #
         max_list_depth = 0
 
-        def _iter(field_name, field_type):
+        def _iter(field_name, field_type, level):
             """ Check all the fields recrusively. """
             nonlocal max_list_depth
+            max_list_depth = max(max_list_depth, level)
             origin = get_origin(field_type)
             is_in_list = False
             if origin is dict:
@@ -464,18 +465,19 @@ class ModelMeta(ABCMeta):
             else:
                 check_type = field_type
             #
-            if isinstance(check_type, ForwardRef):  # Skip forwardref, always using
+            if isinstance(check_type, ForwardRef):  # Skip forwardref, always using for self-referencing
                 pass
             elif isinstance(check_type, SimpleEnumMeta):
                 pass
             elif issubclass(check_type, BaseModel):
-                max_list_depth += 1 if is_in_list else 0
-                for a_n, a_t in get_type_hints(check_type).items():
-                    _iter(a_n, a_t)
+                # We do not use typing.get_type_hints() here
+                # As the method converts str to ForwardRef, but we are now using ForwardRef() directly
+                for a_n, a_t in check_type.__dict__.get('__annotations__', {}).items():
+                    _iter(a_n, a_t, level + (1 if is_in_list else 0))
 
         #
         for f in fields.values():
-            _iter(f.name, f.type)
+            _iter(f.name, f.type, 0)
         #
         if max_list_depth >= 3:
             raise SchemaError(f'Model {name} is too deep: {max_list_depth}')
@@ -499,9 +501,10 @@ class BaseModel(metaclass=ModelMeta):
 
     __slots__ = ('__dict__', '__fields_set__', '__errors__')
     __doc__ = ''
-
-    # TODO: Validate below fields
+    #
     __title__ = None
+    __description__ = None
+    # TODO: Validate below fields
     __searchables__ = []
     __columns__ = []
     __sortables__ = []
@@ -920,7 +923,8 @@ class BaseModel(metaclass=ModelMeta):
                     'columns': type_.__columns__ if type_.__columns__ else required,
                     'sortables': type_.__sortables__ if type_.__sortables__ else [],
                     'py_type': type_.__name__,
-                    'title': type_.__title__ if type_.__title__ else type_.__name__.upper()
+                    'title': type_.__title__ if type_.__title__ else type_.__name__.upper(),
+                    'description': type_.__description__ if type_.__description__ else None,
                 }
                 # layout
                 layout = []
