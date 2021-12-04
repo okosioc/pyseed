@@ -11,7 +11,7 @@
 
 import json
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, ForwardRef
 
 from pyseed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel
 
@@ -55,12 +55,15 @@ class User(MongoModel):
     """ User definition. """
     name: str
     email: str
-    password: str
+    password: str = None
     intro: str = None
     avatar: str = None
     point: int = 0
     status: UserStatus = UserStatus.NORMAL
     roles: List[UserRole] = [UserRole.MEMBER]
+
+    sibling: ForwardRef('User') = None  # Self-referenced by string
+    siblings: List[ForwardRef('User')] = None
 
     update_time: datetime = None
     create_time: datetime = datetime.now
@@ -86,10 +89,20 @@ def test_model():
     assert usr.roles[0] == UserRole.MEMBER
     assert len(usr.l) == 0
 
-    # Test referral modal
+    # Test referencing modal
     usr.last_login.ip = '127.0.0.1'
     usr.last_login.time = now
     assert usr.last_login.ip == '127.0.0.1'
+
+    # Test self-referencing
+    usr.sibling = User(name='sibling', email='sibling')
+    usr.siblings = [
+        User(name='sibling-0', email='sibling-0'),
+        User(name='sibling-1', email='sibling-1'),
+    ]
+    assert type(usr.sibling) == User
+    assert type(usr.siblings[0]) == User
+    assert len(usr.siblings) == 2
 
     # Test copy
     another_usr = usr.copy()
@@ -106,7 +119,6 @@ def test_model():
     admin = User(
         name='admin',
         email='admin',
-        password='admin',
         roles=[UserRole.ADMIN],
         last_login=LastLogin(ip='127.0.0.1', time=now),
         posts=[Post(title='admin', content='content')]
@@ -114,7 +126,6 @@ def test_model():
     editor = User(**{
         'name': 'editor',
         'email': 'editor',
-        'password': 'editor',
         'last_login': {'ip': '127.0.0.1', 'time': now},
         'posts': [{'title': 'editor', 'content': 'editor'}]
     })
@@ -128,7 +139,6 @@ def test_model():
     _validate_and_check_message('User.name')
     usr.name = 'test'
     usr.email = 'test'
-    usr.password = 'test'
 
     usr.posts.append(Post())
     _validate_and_check_message('Post.title')
@@ -143,4 +153,5 @@ def test_model():
     pst.comments.append(Comment(author='test', content='test'))
 
     # Should be valid
+    # print(usr.validate())
     assert len(usr.validate()) == 0

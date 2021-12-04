@@ -10,10 +10,11 @@
 """
 import functools
 import json
+import sys
 from abc import ABCMeta
 from copy import deepcopy
 from datetime import datetime
-from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, get_type_hints, Set, Any
+from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, Set, Any, ForwardRef, List, get_type_hints
 
 from bson import ObjectId
 
@@ -327,63 +328,70 @@ class ModelMeta(ABCMeta):
         """ Create and return a new object. """
         fields: Dict[str, ModelField] = {}
         relations: Dict[str, relation] = {}
-
         # TODO: Support callable validators
-
         slots: Set[str] = namespace.get('__slots__', ())
         slots = {slots} if isinstance(slots, str) else set(slots)
-
+        has_forward_refs = False
+        #
         for base in reversed(bases):
             if issubclass(base, BaseModel) and base is not BaseModel:
                 fields.update(deepcopy(base.__fields__))
 
         def _validate_annotation(field_name, field_type):
-            """ Validate field definition."""
+            """ Validate field definition.
+
+            Do not need to validate recrusively as referencing models has done their own validation.
+            """
+            nonlocal has_forward_refs
             # Validate if shadows a parent attribute
-            for base in bases:
-                if getattr(base, field_name, None):
+            for base_ in bases:
+                if getattr(base_, field_name, None):
                     raise SchemaError(f'{field_name}: {field_type} shadows a parent attribute')
+            #
+            # Validate annotation, i.e, List[str], origin is List while str is check_type
             #
             origin = get_origin(field_type)
             # Simple, including built-in type, SimpleEnum or sub model
             if origin is None:
-                _validate_simple_annotation(field_name, field_type)
+                check_type = field_type
             # Dict
             elif origin is dict:
                 k_type, v_type = get_args(field_type)
                 if k_type is not str:
                     raise SchemaError(f'{field_name}: {field_type} only support str keys')
                 #
-                _validate_simple_annotation(field_name, v_type)
+                check_type = v_type
             # List
             elif origin is list:
-                l_type = get_args(field_type)[0]
-                _validate_simple_annotation(field_name, l_type)
+                check_type = get_args(field_type)[0]
             else:
                 raise SchemaError(f'{field_name}: {field_type} is not supported')
-
-        def _validate_simple_annotation(field_name, field_type):
-            """ Inner method to validate built-in types, SimpleEnums or sub models. """
-            if isinstance(field_type, SimpleEnumMeta):
+            #
+            # Check if inner type is valid
+            #
+            if isinstance(check_type, ForwardRef):
+                has_forward_refs = True
+            elif isinstance(check_type, SimpleEnumMeta):
                 enum_types = set()
-                for member in field_type:
+                for member in check_type:
                     enum_types.add(type(member))
                     if type(member) not in AUTHORIZED_TYPES:
-                        raise SchemaError(f'{field_name}: {field_type} is not an authorized type')
+                        raise SchemaError(f'{field_name}: {check_type} is not an authorized type')
                 if len(enum_types) == 0:
-                    raise SchemaError(f'{field_name}: {field_type} has not defined any enum values')
+                    raise SchemaError(f'{field_name}: {check_type} has not defined any enum values')
                 if len(enum_types) > 1:
-                    raise SchemaError(f'{field_name}: {field_type} can not have more than one type')
-            elif issubclass(field_type, BaseModel):
-                for a_n, a_t in get_type_hints(field_type).items():
-                    _validate_annotation(a_n, a_t)
-            elif field_type not in AUTHORIZED_TYPES:
-                raise SchemaError(f'{field_name}: {field_type} is not an authorized type')
+                    raise SchemaError(f'{field_name}: {check_type} can not have more than one type')
+            elif issubclass(check_type, BaseModel):
+                pass
+            elif check_type not in AUTHORIZED_TYPES:
+                raise SchemaError(f'{field_name}: {check_type} is not an authorized type')
 
         # Validation
         skips = set()
         if namespace.get('__qualname__') != 'BaseModel':
-            # Annotations
+            #
+            # Annotations(Fields), similar to typing.get_type_hints
+            #
             annotations = namespace.get('__annotations__', {})
             for ann_name, ann_type in annotations.items():
                 # Skip
@@ -434,16 +442,52 @@ class ModelMeta(ABCMeta):
                 fields[ann_name] = field
             #
             # Relations
+            #
             for attr in namespace:
                 if isinstance(namespace.get(attr), relation):
                     relations[attr] = namespace.get(attr)
+        #
+        # Check depth
+        #
+        max_list_depth = 0
 
+        def _iter(field_name, field_type):
+            """ Check all the fields recrusively. """
+            nonlocal max_list_depth
+            origin = get_origin(field_type)
+            is_in_list = False
+            if origin is dict:
+                _, check_type = get_args(field_type)
+            elif origin is list:
+                check_type = get_args(field_type)[0]
+                is_in_list = True
+            else:
+                check_type = field_type
+            #
+            if isinstance(check_type, ForwardRef):  # Skip forwardref, always using
+                pass
+            elif isinstance(check_type, SimpleEnumMeta):
+                pass
+            elif issubclass(check_type, BaseModel):
+                max_list_depth += 1 if is_in_list else 0
+                for a_n, a_t in get_type_hints(check_type).items():
+                    _iter(a_n, a_t)
+
+        #
+        for f in fields.values():
+            _iter(f.name, f.type)
+        #
+        if max_list_depth >= 3:
+            raise SchemaError(f'Model {name} is too deep: {max_list_depth}')
+        #
         # Create class
+        #
         exclude_from_namespace = fields.keys() | skips | relations.keys() | {'__slots__'}
         new_namespace = {
             '__fields__': fields,
             '__slots__': slots,
             '__relations__': relations,
+            '__has_forward_refs__': has_forward_refs,
             **{n: v for n, v in namespace.items() if n not in exclude_from_namespace},
         }
         cls = super().__new__(mcs, name, bases, new_namespace, **kwargs)
@@ -475,6 +519,27 @@ class BaseModel(metaclass=ModelMeta):
         object.__setattr__(self, '__fields_set__', fields_set)
         object.__setattr__(self, '__errors__', errors)
 
+    @classmethod
+    def update_forward_refs(cls) -> None:
+        """ Try to update ForwardRefs on fields based on this Model. """
+        print('try to update_forward_refs')
+        globalns = sys.modules[cls.__module__].__dict__.copy()
+        globalns.setdefault(cls.__name__, cls)
+        for f in cls.__fields__.values():
+            origin = get_origin(f.type)
+            if origin is dict:
+                _, check_type = get_args(f.type)
+                if check_type.__class__ == ForwardRef:
+                    f.type = Dict[check_type._evaluate(globalns, None)]
+            elif origin is list:
+                check_type = get_args(f.type)[0]
+                if check_type.__class__ == ForwardRef:
+                    f.type = List[check_type._evaluate(globalns, None)]
+            else:
+                check_type = f.type
+                if check_type.__class__ == ForwardRef:
+                    f.type = check_type._evaluate(globalns, None)
+
     def validate(self):
         """ Validate self. """
         _, _, errors = self.validate_data(self.__dict__)
@@ -487,6 +552,11 @@ class BaseModel(metaclass=ModelMeta):
 
         :param data: Inner sub models can be dict or model instance
         """
+        # Try to replace ForwardRef firstly
+        if cls.__has_forward_refs__:
+            cls.update_forward_refs()
+            cls.__has_forward_refs__ = False
+        #
         values = {}
         fields_set = set()
         errors = []
@@ -577,12 +647,16 @@ class BaseModel(metaclass=ModelMeta):
                     type_errors.append(
                         DataError(f'{cls.__name__}.{field.name}: {field.type} has invalid value'))
             elif issubclass(type_, BaseModel):
-                #  Value can be raw dict against sub model
+                # Value can be raw dict against sub model
                 if isinstance(type_value, dict):
                     type_value = type_(**value)
                     if type_value.__errors__:
                         type_errors.extend(type_value.__errors__)
-                # Value is instance of sub model
+                # Value should be same type
+                elif not isinstance(type_value, type_):
+                    type_errors.append(
+                        DataError(f'{cls.__name__}.{field.name}: {field.type} only support {type_} value'))
+                # Value is a sub model
                 else:
                     errors = type_value.validate()
                     if errors:
@@ -785,6 +859,7 @@ class BaseModel(metaclass=ModelMeta):
                     'enum': list(type_),
                     'enum_titles': type_.titles,
                     'format': Format.SELECT,
+                    'py_type': type_.__name__,
                 })
                 return enum
             elif issubclass(type_, BaseModel):

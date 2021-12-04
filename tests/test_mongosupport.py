@@ -13,7 +13,7 @@ import pytest
 from pymongo.errors import DuplicateKeyError
 
 from pyseed import DataError
-from tests.test_model import User
+from .test_model import User
 
 
 def test_crud(db):
@@ -25,7 +25,6 @@ def test_crud(db):
     usr = User()
     usr.name = 'test'
     usr.email = 'test'
-    usr.password = 'test'
     usr.save()
     assert User.count({}) == 1
     # R
