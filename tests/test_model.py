@@ -80,6 +80,19 @@ class User(MongoModel):
 
 def test_model():
     """ Test cases for modal definition. """
+    # Test schema
+    schema = User.schema()
+    assert schema['type'] == 'object'
+    assert schema['properties']['_id']['py_type'] == 'ObjectId'
+    assert schema['properties']['status']['enum'] == list(UserStatus)
+    assert schema['properties']['sibling']['$ref'] == '#'
+    assert schema['properties']['siblings']['type'] == 'array'
+    assert schema['properties']['siblings']['items']['$ref'] == '#'
+    assert schema['properties']['posts']['items']['properties']['title']['type'] == 'string'
+    assert schema['properties']['posts']['items']['properties']['comments']['items']['properties']['date'][
+               'type'] == 'date'
+
+    # Prepare an instance of User
     now = datetime.now()
     usr = User()
 

@@ -489,10 +489,30 @@ class ModelMeta(ABCMeta):
             '__fields__': fields,
             '__slots__': slots,
             '__relations__': relations,
-            '__has_forward_refs__': has_forward_refs,
             **{n: v for n, v in namespace.items() if n not in exclude_from_namespace},
         }
         cls = super().__new__(mcs, name, bases, new_namespace, **kwargs)
+        #
+        # Try to update ForwardRef after class is created
+        #
+        if has_forward_refs:
+            globalns = sys.modules[cls.__module__].__dict__.copy()
+            globalns.setdefault(cls.__name__, cls)
+            for f in cls.__fields__.values():
+                f_origin = get_origin(f.type)
+                if f_origin is dict:
+                    _, typ = get_args(f.type)
+                    if typ.__class__ == ForwardRef:
+                        f.type = Dict[typ._evaluate(globalns, None)]
+                elif f_origin is list:
+                    typ = get_args(f.type)[0]
+                    if typ.__class__ == ForwardRef:
+                        f.type = List[typ._evaluate(globalns, None)]
+                else:
+                    typ = f.type
+                    if typ.__class__ == ForwardRef:
+                        f.type = typ._evaluate(globalns, None)
+        #
         return cls
 
 
@@ -522,27 +542,6 @@ class BaseModel(metaclass=ModelMeta):
         object.__setattr__(self, '__fields_set__', fields_set)
         object.__setattr__(self, '__errors__', errors)
 
-    @classmethod
-    def update_forward_refs(cls) -> None:
-        """ Try to update ForwardRefs on fields based on this Model. """
-        print('try to update_forward_refs')
-        globalns = sys.modules[cls.__module__].__dict__.copy()
-        globalns.setdefault(cls.__name__, cls)
-        for f in cls.__fields__.values():
-            origin = get_origin(f.type)
-            if origin is dict:
-                _, check_type = get_args(f.type)
-                if check_type.__class__ == ForwardRef:
-                    f.type = Dict[check_type._evaluate(globalns, None)]
-            elif origin is list:
-                check_type = get_args(f.type)[0]
-                if check_type.__class__ == ForwardRef:
-                    f.type = List[check_type._evaluate(globalns, None)]
-            else:
-                check_type = f.type
-                if check_type.__class__ == ForwardRef:
-                    f.type = check_type._evaluate(globalns, None)
-
     def validate(self):
         """ Validate self. """
         _, _, errors = self.validate_data(self.__dict__)
@@ -555,11 +554,6 @@ class BaseModel(metaclass=ModelMeta):
 
         :param data: Inner sub models can be dict or model instance
         """
-        # Try to replace ForwardRef firstly
-        if cls.__has_forward_refs__:
-            cls.update_forward_refs()
-            cls.__has_forward_refs__ = False
-        #
         values = {}
         fields_set = set()
         errors = []
@@ -855,6 +849,7 @@ class BaseModel(metaclass=ModelMeta):
         """
 
         def _gen_schema(type_: Type):
+
             """ Generate schema for type. """
             if isinstance(type_, SimpleEnumMeta):
                 enum = _gen_schema(type_.type)
@@ -878,16 +873,28 @@ class BaseModel(metaclass=ModelMeta):
                     # List
                     elif origin is list:
                         l_type = get_args(f_t.type)[0]
-                        inner_type = _gen_schema(l_type)
-                        field_schema.update({
-                            'type': 'array',
-                            'items': inner_type,
-                            'py_type': f'List[{inner_type["py_type"]}]',
-                        })
+                        # https://json-schema.org/understanding-json-schema/structuring.html#recursion
+                        # Self-referencing
+                        if l_type == type_:
+                            field_schema.update({
+                                'type': 'array',
+                                'items': {'$ref': '#'},
+                                'py_type': f'List[{type_.__name__}]',
+                            })
+                        else:
+                            inner_type = _gen_schema(l_type)
+                            field_schema.update({
+                                'type': 'array',
+                                'items': inner_type,
+                                'py_type': f'List[{inner_type["py_type"]}]',
+                            })
                     # built-in type, SimpleEnum or sub model
                     else:
-                        inner_type = _gen_schema(f_t.type)
-                        field_schema.update(inner_type)
+                        if f_t.type == type_:  # Self-referencing
+                            field_schema.update({'$ref': '#'})
+                        else:
+                            inner_type = _gen_schema(f_t.type)
+                            field_schema.update(inner_type)
                     # default
                     if f_t.default:
                         # Skip if default is callable, e.g, datetime.now
