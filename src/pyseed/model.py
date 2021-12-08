@@ -136,6 +136,7 @@ class Format(SimpleEnum):
     CHECKBOX = 'checkbox'  # Default format for bool
     SWITCH = 'switch'
     HIDDEN = 'hidden'  # Hidden input
+    LINK = 'link'  # Text input with an extenral link
     # Below values are used for inner model/dict or list of model/dict
     LIST = 'list'  # Default format for List
     TAB = 'tab'
@@ -496,6 +497,14 @@ class ModelMeta(ABCMeta):
         # Try to update ForwardRef after class is created
         #
         if has_forward_refs:
+
+            def evaluate_forward_ref(type_, globalns_):
+                """ Create real class of forward ref. """
+                if sys.version_info < (3, 9):
+                    return type_._evaluate(globalns_, None)
+                else:
+                    return type_._evaluate(globalns_, None, set())
+
             globalns = sys.modules[cls.__module__].__dict__.copy()
             globalns.setdefault(cls.__name__, cls)
             for f in cls.__fields__.values():
@@ -503,15 +512,15 @@ class ModelMeta(ABCMeta):
                 if f_origin is dict:
                     _, typ = get_args(f.type)
                     if typ.__class__ == ForwardRef:
-                        f.type = Dict[typ._evaluate(globalns, None)]
+                        f.type = Dict[evaluate_forward_ref(typ, globalns)]
                 elif f_origin is list:
                     typ = get_args(f.type)[0]
                     if typ.__class__ == ForwardRef:
-                        f.type = List[typ._evaluate(globalns, None)]
+                        f.type = List[evaluate_forward_ref(typ, globalns)]
                 else:
                     typ = f.type
                     if typ.__class__ == ForwardRef:
-                        f.type = typ._evaluate(globalns, None)
+                        f.type = evaluate_forward_ref(typ, globalns)
         #
         return cls
 
