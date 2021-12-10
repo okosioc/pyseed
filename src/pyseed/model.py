@@ -321,6 +321,14 @@ class relation(object):
 # Meta class
 #
 
+def evaluate_forward_ref(type_, globalns_):
+    """ Create real class of forward ref. """
+    if sys.version_info < (3, 9):
+        return type_._evaluate(globalns_, None)
+    else:
+        return type_._evaluate(globalns_, None, set())
+
+
 class ModelMeta(ABCMeta):
     """ Metaclass for model. """
 
@@ -497,14 +505,6 @@ class ModelMeta(ABCMeta):
         # Try to update ForwardRef after class is created
         #
         if has_forward_refs:
-
-            def evaluate_forward_ref(type_, globalns_):
-                """ Create real class of forward ref. """
-                if sys.version_info < (3, 9):
-                    return type_._evaluate(globalns_, None)
-                else:
-                    return type_._evaluate(globalns_, None, set())
-
             globalns = sys.modules[cls.__module__].__dict__.copy()
             globalns.setdefault(cls.__name__, cls)
             for f in cls.__fields__.values():
@@ -538,6 +538,8 @@ class BaseModel(metaclass=ModelMeta):
     __columns__ = []
     __sortables__ = []
     __layout__ = None
+    __layout_read__ = None
+    __layout_form__ = None
 
     def __init__(self, *d: Dict[str, Any], **data: Any) -> None:
         """ Init.
@@ -849,13 +851,25 @@ class BaseModel(metaclass=ModelMeta):
         However, we still have some grammars
           - add enum_titles to help code generation
           - add py_type to help code generation
-          - add layout to help code generation
+          - add layout, layout_read, layout_form to help code generation
           - add type date
           - Add format to array, so that we can gen a component for the whole array
           - Add searchables to root object, so that it can be used to generate search form
           - Add sortables to object, so that it can be used to generate order drowpdown
           - Add columns to object, so that it can be used to generate columns for table
         """
+
+        def _parse_layout(body):
+            """ Parse layout. """
+            layout = []
+            rows = body.strip().splitlines()
+            for r in rows:
+                r = r.strip().strip(',')
+                if not r:
+                    continue
+                layout.append([x.strip() for x in r.split(',')])
+            #
+            return layout
 
         def _gen_schema(type_: Type):
 
@@ -943,18 +957,22 @@ class BaseModel(metaclass=ModelMeta):
                     'description': type_.__description__ if type_.__description__ else None,
                 }
                 # layout
-                layout = []
                 if type_.__layout__:
-                    rows = type_.__layout__.strip().splitlines()
-                    for r in rows:
-                        r = r.strip().strip(',')
-                        if not r:
-                            continue
-                        layout.append([x.strip() for x in r.split(',')])
+                    layout = _parse_layout(type_.__layout__)
                 else:
                     layout = [[f] for f in properties.keys()]  # Each field has one row
                 #
+                layout_read, layout_form = layout, layout
+                #
+                if type_.__layout_read__:
+                    layout_read = _parse_layout(type_.__layout_read__)
+                #
+                if type_.__layout_form__:
+                    layout_form = _parse_layout(type_.__layout_form__)
+                #
                 obj['layout'] = layout
+                obj['layout_read'] = layout_read
+                obj['layout_form'] = layout_form
                 #
                 return obj
             elif type_ is str:
@@ -979,3 +997,6 @@ class BaseModel(metaclass=ModelMeta):
         #
         # print(json.dumps(ret))
         return ret
+
+
+
