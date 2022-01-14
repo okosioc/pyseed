@@ -137,8 +137,9 @@ class Format(SimpleEnum):
     SWITCH = 'switch'
     HIDDEN = 'hidden'  # Hidden input
     LINK = 'link'  # Text input with an extenral link
+    TIME = 'time'  # Time picker
     # Below values are used for inner model/dict or list of model/dict
-    LIST = 'list'  # Default format for List
+    LIST = 'list'
     TAB = 'tab'
     TABLE = 'table'
     MODAL = 'modal'
@@ -290,16 +291,21 @@ class ModelField:
 class relation(object):
     """ Decorator on a method to tell that it is used to fetch related models.
 
-    class Parrot:
-        def __init__(self):
-            self._voltage = 100
-        @relation
-        def voltage(self):
-            return self._voltage
+    class Post(BaseModel):
+        creator_id: ObjectId
+        tag_ids: List[ObjectId]
 
-    p = Parrot()
-    print(p.voltage)
-    #=> 100
+        @relation
+        def creator(self):
+            return User.find_one(self.creator_id)
+
+        @relation
+        def tags(self):
+            return list(Tag.find({'_id':{'$in':self.tag_ids}})
+
+    p = Post()
+    p.creator
+    p.tags
 
     Reference:
     https://docs.python.org/3/howto/descriptor.html#properties
@@ -337,6 +343,7 @@ class ModelMeta(ABCMeta):
         """ Create and return a new object. """
         fields: Dict[str, ModelField] = {}
         relations: Dict[str, relation] = {}
+        properties: Dict[str, property] = {}
         # TODO: Support callable validators
         slots: Set[str] = namespace.get('__slots__', ())
         slots = {slots} if isinstance(slots, str) else set(slots)
@@ -450,11 +457,13 @@ class ModelMeta(ABCMeta):
                 #
                 fields[ann_name] = field
             #
-            # Relations
+            # Relations & Properties
             #
             for attr in namespace:
                 if isinstance(namespace.get(attr), relation):
                     relations[attr] = namespace.get(attr)
+                if isinstance(namespace.get(attr), property):
+                    properties[attr] = namespace.get(attr)
         #
         # Check depth
         #
@@ -493,11 +502,12 @@ class ModelMeta(ABCMeta):
         #
         # Create class
         #
-        exclude_from_namespace = fields.keys() | skips | relations.keys() | {'__slots__'}
+        exclude_from_namespace = fields.keys() | skips | relations.keys() | properties.keys() | {'__slots__'}
         new_namespace = {
             '__fields__': fields,
             '__slots__': slots,
             '__relations__': relations,
+            '__properties__': properties,
             **{n: v for n, v in namespace.items() if n not in exclude_from_namespace},
         }
         cls = super().__new__(mcs, name, bases, new_namespace, **kwargs)
@@ -695,10 +705,14 @@ class BaseModel(metaclass=ModelMeta):
             if v is not None:
                 self.__setattr__(name, v)
             return v
-        # Because __dict__ is overwrited by fields, so we need check mannaully invoke relation
+        # Because __dict__ is overwrited by values, so we need invoke relation mannaully
         if name in self.__class__.__relations__:
-            relation_property = self.__class__.__relations__[name]
-            return relation_property.__get__(self)
+            rel = self.__class__.__relations__[name]
+            return rel.__get__(self)
+        # Invoke property mannaully
+        if name in self.__class__.__properties__:
+            prp = self.__class__.__properties__[name]
+            return prp.__get__(self)
         #
         raise AttributeError(f'\'{self.__class__.__name__}\' object has no attribute \'{name}\'')
 
@@ -997,6 +1011,3 @@ class BaseModel(metaclass=ModelMeta):
         #
         # print(json.dumps(ret))
         return ret
-
-
-

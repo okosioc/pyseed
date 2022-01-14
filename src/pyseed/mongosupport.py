@@ -232,8 +232,19 @@ class MongoModel(BaseModel):
         return collection.insert_many(docs, *args, **kwargs)
 
     @classmethod
-    def find_one(cls, filter_or_id=None, *args, **kwargs):
+    def find_one(cls, filter_or_id, *args, **kwargs):
+        """ Get a single model.
+
+        https://pymongo.readthedocs.io/en/stable/api/pymongo/collection.html#pymongo.collection.Collection.find_one
+        """
         collection = cls.get_collection(**kwargs)
+        # If condition is None, pymongo will return the first document from collection, this may cause unexpected problems
+        # e.g,
+        # We would link to fetch a related user using User.find_one(self.uid), if uid is None, it is expected to return None.
+        # If you would like to return a single user, use {} as condition, i.e, User.find_one({})
+        if filter_or_id is None:
+            return None
+        #
         doc = collection.find_one(filter_or_id, *args, **kwargs)
         if doc:
             return cls(doc)
@@ -243,6 +254,9 @@ class MongoModel(BaseModel):
     @classmethod
     def find_one_and_update(cls, filter_or_id, update, *args, **kwargs):
         collection = cls.get_collection(**kwargs)
+        if filter_or_id is None:
+            return None
+        #
         doc = collection.find_one_and_update(filter_or_id, update, *args, **kwargs)
         if doc:
             return cls(doc)
