@@ -13,6 +13,8 @@ import json
 from datetime import datetime
 from typing import List, Dict, ForwardRef
 
+import pytest
+
 from pyseed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel
 
 
@@ -152,6 +154,14 @@ def test_model():
     _validate_and_check_message('User.name')
     usr.name = 'test'
     usr.email = 'test'
+
+    # Test deleting field
+    del usr.name
+    with pytest.raises(AttributeError):
+        del usr.name
+    # Validate after deleting
+    _validate_and_check_message('User.name')
+    usr.name = 'test'
 
     usr.posts.append(Post())
     _validate_and_check_message('Post.title')

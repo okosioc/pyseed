@@ -538,7 +538,7 @@ class ModelMeta(ABCMeta):
 class BaseModel(metaclass=ModelMeta):
     """ Base Model. """
 
-    __slots__ = ('__dict__', '__fields_set__', '__errors__')
+    __slots__ = ('__dict__', '__errors__')
     __doc__ = ''
     #
     __title__ = None
@@ -558,14 +558,13 @@ class BaseModel(metaclass=ModelMeta):
         :param **data: create model from kwargs
         """
         data_ = d[0] if d else data
-        values, fields_set, errors = self.validate_data(data_)
+        values, errors = self.validate_data(data_)
         object.__setattr__(self, '__dict__', values)
-        object.__setattr__(self, '__fields_set__', fields_set)
         object.__setattr__(self, '__errors__', errors)
 
     def validate(self):
         """ Validate self. """
-        _, _, errors = self.validate_data(self.__dict__)
+        _, errors = self.validate_data(self.__dict__)
         object.__setattr__(self, '__errors__', errors)
         return errors
 
@@ -576,7 +575,6 @@ class BaseModel(metaclass=ModelMeta):
         :param data: Inner sub models can be dict or model instance
         """
         values = {}
-        fields_set = set()
         errors = []
         # Validate against schema
         # print(f'Validate {cls.__name__} with {data}')
@@ -584,7 +582,6 @@ class BaseModel(metaclass=ModelMeta):
             field_value, field_errors = cls._validate_field(field_type, data.get(field_name, Undefined))
             if field_value is not Undefined:
                 values[field_name] = field_value
-                fields_set.add(field_name)
             if field_errors:
                 errors.extend(field_errors)
         # Check if any non-defined field
@@ -592,7 +589,7 @@ class BaseModel(metaclass=ModelMeta):
         if len(undefined_fields) > 0:
             errors.append(f'{cls.__name__}: Found undefined data fields, {undefined_fields}')
         #
-        return values, fields_set, errors
+        return values, errors
 
     @classmethod
     def _validate_field(cls, field: ModelField, value: Any):
@@ -685,11 +682,18 @@ class BaseModel(metaclass=ModelMeta):
         return type_value, type_errors
 
     def __setattr__(self, name, value):
+        """ Set a field. """
         self.__dict__[name] = value
-        self.__fields_set__.add(name)
+
+    def __delattr__(self, name):
+        """ Del a field. """
+        if name not in self.__dict__:
+            raise AttributeError(name)
+        #
+        del self.__dict__[name]
 
     def __getattr__(self, name):
-        """ if the field name is predefined and referral model, create a model object first. """
+        """ Try to init a field if it is not in self.__dict__. """
         if name in self.__class__.__fields__:
             type_ = self.__class__.__fields__[name].type
             origin = get_origin(type_)
@@ -704,6 +708,7 @@ class BaseModel(metaclass=ModelMeta):
             #
             if v is not None:
                 self.__setattr__(name, v)
+            #
             return v
         # Because __dict__ is overwrited by values, so we need invoke relation mannaully
         if name in self.__class__.__relations__:
@@ -766,8 +771,6 @@ class BaseModel(metaclass=ModelMeta):
         cls = self.__class__
         m = cls.__new__(cls)
         object.__setattr__(m, '__dict__', v)
-        fields_set = self.__fields_set__ | update.keys()
-        object.__setattr__(m, '__fields_set__', fields_set)
         #
         return m
 
