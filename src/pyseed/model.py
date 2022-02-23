@@ -584,10 +584,12 @@ class BaseModel(metaclass=ModelMeta):
                 values[field_name] = field_value
             if field_errors:
                 errors.extend(field_errors)
-        # Check if any non-defined field
+        # Check if any non-defined fields
         undefined_fields = set(data.keys()) - set(cls.__fields__.keys())
         if len(undefined_fields) > 0:
-            errors.append(f'{cls.__name__}: Found undefined data fields, {undefined_fields}')
+            # Do not raise error for non-defined fields
+            # errors.append(f'{cls.__name__}: Found undefined data fields, {undefined_fields}')
+            pass
         #
         return values, errors
 
