@@ -15,7 +15,7 @@ from typing import List, Dict, ForwardRef
 
 import pytest
 
-from pyseed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel
+from pyseed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel, ModelField, Comparator
 
 
 class UserRole(SimpleEnum):
@@ -45,7 +45,7 @@ class Comment(BaseModel):
 
 
 class Post(BaseModel):
-    """ Post model"""
+    """ Post model. """
     title: str
     content: str
     date: datetime = datetime.now
@@ -55,13 +55,13 @@ class Post(BaseModel):
 
 class User(MongoModel):
     """ User definition. """
-    name: str
+    name: str = ModelField(searchable=Comparator.LIKE)
     email: str
     password: str = None
     intro: str = None
     avatar: str = None
-    point: int = 0
-    status: UserStatus = UserStatus.NORMAL
+    point: int = ModelField(default=0, editable=False)
+    status: UserStatus = ModelField(default=UserStatus.NORMAL, searchable=Comparator.EQ)
     roles: List[UserRole] = [UserRole.MEMBER]
 
     sibling: ForwardRef('User') = None  # Self-referenced by string
@@ -77,6 +77,14 @@ class User(MongoModel):
     l: List[str] = None
     d: Dict[str, str] = None
 
+    __columns__ = ['avatar', 'name', 'email', 'status', 'create_time']
+    __layout__ = '''
+    avatar
+    name, email
+    point, status
+    -
+    last_login
+    '''
     __indexes__ = [{'fields': ['email'], 'unique': True}]
 
 
@@ -93,6 +101,10 @@ def test_model():
     assert schema['properties']['posts']['items']['properties']['title']['type'] == 'string'
     assert schema['properties']['posts']['items']['properties']['comments']['items']['properties']['date'][
                'type'] == 'date'
+    assert len(schema['columns']) == len(User.__columns__)
+    assert len(schema['layout']) == 5
+    assert schema['searchables'] == ['name__like', 'status']
+    assert not schema['properties']['point']['editable']
 
     # Prepare an instance of User
     now = datetime.now()

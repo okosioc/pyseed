@@ -139,15 +139,13 @@ class Format(SimpleEnum):
     LINK = 'link'  # Text input with an extenral link
     TIME = 'time'  # Time picker
     # Below values are used for inner model/dict or list of model/dict
-    LIST = 'list'
-    TAB = 'tab'
-    TABLE = 'table'
-    MODAL = 'modal'
-    CARD = 'card'
-    CAROUSEL = 'carousel'
-    CHART = 'chart'  # Object{title, names, values}
-    STATISTIC = 'statistic'  # Simple value or List[value] or List[{name, value}]
-    COLLAPSE = 'collapse'
+    LIST = 'list'  # Objects in list, i.e, [{}]
+    TAB = 'tab'  # Objects with tabs nav, i.e, [{}]
+    TABLE = 'table'  # Objects in table, i.e, [{}]
+    MODAL = 'modal'  # Objects with some fields in table and all fields in modal, i.e, [{}]
+    GRID = 'grid'  # Objects in grid, i.e, [{}]
+    CHART = 'chart'  # Charting with series, i.e, {title, names, values}
+    STATISTIC = 'statistic'  # Statistic card, i.e, {title, value, chart, children, extras}
     CASCADER = 'cascader'  # Cascade selection, i.e, List[str]
     LATLNG = 'latlng'  # LatLng chooser, i.e, List[float]
 
@@ -247,6 +245,9 @@ class ModelField:
         'type',
         'default',
         'required',
+        'editable',
+        'searchable',
+        'sortable',
         'format',
         'title',
         'description',
@@ -256,8 +257,9 @@ class ModelField:
 
     def __init__(self,
                  name: str = None, type_: Type = None,
-                 default: Any = Undefined, required: bool = Undefined, format_: Format = None,
-                 title: str = None, description: str = None, unit: str = None, alias: str = None) -> None:
+                 default: Any = Undefined, required: bool = Undefined,
+                 editable: bool = Undefined, searchable: Comparator = Undefined, sortable: bool = Undefined,
+                 format_: Format = None, title: str = None, description: str = None, unit: str = None, alias: str = None) -> None:
         """ Init method.
 
         :param type_: annotaion for field, e.g, str or Dict[str, str] or List[Object]
@@ -274,6 +276,22 @@ class ModelField:
             self.required = True
         else:
             self.required = required
+        # editable is true if undefined
+        if editable is Undefined:
+            self.editable = True
+        else:
+            self.editable = editable
+        # searchable is none if undefined
+        if searchable is Undefined:
+            self.searchable = None
+        else:
+            self.searchable = searchable
+        # sortable is false if undefined
+        if sortable is Undefined:
+            self.sortable = False
+        else:
+            self.sortable = sortable
+        #
         self.format = format_
         self.title = title
         self.description = description
@@ -429,9 +447,12 @@ class ModelMeta(ABCMeta):
                     field.required = False
                 # Define a ModelField directly
                 elif isinstance(value, ModelField):
-                    # x7
+                    # x10
                     field.default = value.default
                     field.required = value.required
+                    field.editable = value.editable
+                    field.searchable = value.searchable
+                    field.sortable = value.sortable
                     field.format = value.format
                     field.title = value.title
                     field.description = value.description
@@ -541,15 +562,26 @@ class BaseModel(metaclass=ModelMeta):
     __slots__ = ('__dict__', '__errors__')
     __doc__ = ''
     #
+    # Fields sould be overwrited
+    #
     __title__ = None
     __description__ = None
-    # TODO: Validate below fields
-    __searchables__ = []
+    # TODO: Validate all fields in layout are defined
+    # Define fields can be show in query result table or card
     __columns__ = []
-    __sortables__ = []
+    # Define
     __layout__ = None
-    __layout_read__ = None
-    __layout_form__ = None
+    #
+    # Below fields are generated using __layout__ and each field's attribute,
+    # you can also define them to overwrite the calcuated default value
+    #
+    # All fields whose searchable is not none
+    # If you would like to define it, each element can be tuple (field name, comparator) or field name
+    # e.g, [('name', Comparator.LIKE), 'status']
+    __searchables__ = []
+    # All fields with sortable is true
+    # If you would like to define it, each element must be field name
+    __sortables__ = []
 
     def __init__(self, *d: Dict[str, Any], **data: Any) -> None:
         """ Init.
@@ -868,12 +900,10 @@ class BaseModel(metaclass=ModelMeta):
         https://swagger.io/docs/specification/data-models/
 
         However, we still have some grammars
-          - add enum_titles to help code generation
-          - add py_type to help code generation
-          - add layout, layout_read, layout_form to help code generation
           - add type date
+          - add enum_titles, py_type, layout, editable to help code generation
           - Add format to array, so that we can gen a component for the whole array
-          - Add searchables to root object, so that it can be used to generate search form
+          - Add searchables to object, so that it can be used to generate search form
           - Add sortables to object, so that it can be used to generate order drowpdown
           - Add columns to object, so that it can be used to generate columns for table
         """
@@ -883,9 +913,10 @@ class BaseModel(metaclass=ModelMeta):
             layout = []
             rows = body.strip().splitlines()
             for r in rows:
-                r = r.strip().strip(',')
-                if not r:
+                r = r.strip()
+                if not r:  # Skip blank lines
                     continue
+                #
                 layout.append([x.strip() for x in r.split(',')])
             #
             return layout
@@ -904,7 +935,7 @@ class BaseModel(metaclass=ModelMeta):
                 return enum
             elif issubclass(type_, BaseModel):
                 properties = {}
-                required = []
+                required, searchables, sortables = [], [], []
                 for f_n, f_t in type_.__fields__.items():
                     field_schema = {}
                     origin = get_origin(f_t.type)
@@ -960,20 +991,28 @@ class BaseModel(metaclass=ModelMeta):
                         if f_t.format in [Format.DATE, Format.DATETIME]:
                             field_schema.update({'type': 'date'})
                     # required
-                    properties[f_n] = field_schema
                     if f_t.required:
                         field_schema.update({'required': True})
                         required.append(f_n)
+                    # editable
+                    field_schema.update({'editable': f_t.editable})
+                    # searchable
+                    if f_t.searchable is not None:
+                        searchables.append((f_n, f_t.searchable))
+                    # sortable
+                    if f_t.sortable is True:
+                        sortables.append(f_n)
+                    #
+                    properties[f_n] = field_schema
                 #
                 obj = {
                     'type': 'object',
                     'properties': properties,
                     'required': required,
-                    'columns': type_.__columns__ if type_.__columns__ else required,
-                    'sortables': type_.__sortables__ if type_.__sortables__ else [],
+                    'columns': type_.__columns__ if type_.__columns__ else required,  # Using required fields as columns as the default
                     'py_type': type_.__name__,
                     'title': type_.__title__ if type_.__title__ else type_.__name__.upper(),
-                    'description': type_.__description__ if type_.__description__ else None,
+                    'description': type_.__description__ if type_.__description__ else None
                 }
                 # layout
                 if type_.__layout__:
@@ -981,17 +1020,16 @@ class BaseModel(metaclass=ModelMeta):
                 else:
                     layout = [[f] for f in properties.keys()]  # Each field has one row
                 #
-                layout_read, layout_form = layout, layout
-                #
-                if type_.__layout_read__:
-                    layout_read = _parse_layout(type_.__layout_read__)
-                #
-                if type_.__layout_form__:
-                    layout_form = _parse_layout(type_.__layout_form__)
-                #
                 obj['layout'] = layout
-                obj['layout_read'] = layout_read
-                obj['layout_form'] = layout_form
+                # searchables
+                if type_.__searchables__:
+                    searchables = [('{}__{}'.format(*s) if isinstance(s, tuple) else s) for s in cls.__searchables__]
+                else:
+                    searchables = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
+                #
+                obj['searchables'] = searchables
+                # sortables
+                obj['sortables'] = type_.__sortables__ if type_.__sortables__ else sortables
                 #
                 return obj
             elif type_ is str:
@@ -1009,10 +1047,6 @@ class BaseModel(metaclass=ModelMeta):
 
         #
         ret = _gen_schema(cls)
-        # Root level properties
-        searchables = [('%s__%s' % s if isinstance(s, tuple) else s) for s in cls.__searchables__]
-        if searchables:
-            ret['searchables'] = searchables
-        #
         # print(json.dumps(ret))
+        #
         return ret

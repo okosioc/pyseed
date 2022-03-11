@@ -149,6 +149,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
         'blueprints': [],  # [blueprint]
         'seeds': [],
     }
+    column_set = set()
     logger.info(f'Seeds:')
     for d in os.listdir(seeds_dir):  # Blueprints
         p = os.path.join(seeds_dir, d)
@@ -187,7 +188,10 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
                                         if 'model' in seed:
                                             models_by_name[seed['model']['name']] = seed['model']
                                             view['seeds'].append(seed)
-                                            context['seeds'].append(seed)
+                                            # Remove dulplicated column at context level, no need to do this to view level
+                                            if cc not in column_set:
+                                                context['seeds'].append(seed)
+                                                column_set.add(cc)
                                         #
                                         column.append(seed)
                                     #
@@ -199,7 +203,9 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
                                     if 'model' in seed:
                                         models_by_name[seed['model']['name']] = seed['model']
                                         view['seeds'].append(seed)
-                                        context['seeds'].append(seed)
+                                        if c not in column_set:  # Same as ditto
+                                            context['seeds'].append(seed)
+                                            column_set.add(c)
                                     #
                                     row['columns'].append(seed)
                             #
@@ -271,24 +277,27 @@ def _parse_seed(column, models):
 
     model-action?params
     """
-    # params
+    # Params
     params = {}
     if '?' in column:
         column, query = column.split('?')
         for p in query.split('&'):
             key, value = p.split('=')
             params[key] = _parse_varible_value(key, value)
-    # model-action
+    # model-action-suffix
+    # Suffix is used to distinguish seeds with different params, e.g,
+    #   user-form-0?is_horizontal=true
+    #   user-form-1?is_horizontal=false
     tokens = column.split('-')
     name = tokens[0]
     sub = None
-    # sub model, only support one level sub model
+    # Sub model and only support one level sub model
     if '.' in name:
         name, sub = name.split('.')
-    # found model by name
+    # Find model by name
     found = next((m for n, m in models.items() if n.lower() == name.lower()), None)
     if found:
-        action = tokens[-1]
+        action = tokens[1]
         return {'model': found, 'sub': sub, 'action': action, 'params': params, **_generate_names(column)}
     else:
         return {'params': params, **_generate_names(column)}
@@ -324,11 +333,11 @@ def _recursive_render(t_base, o_base, name, context, env):
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'views':
             out_key = '__view'
-            out_values = context['__blueprint']['views']
+            out_values = context['__blueprint']['views']  # Views under current blueprint
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'seeds':
             out_key = '__seed'
-            out_values = context['seeds']
+            out_values = context['seeds']  # Seeds can be accessed at context level
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         else:
             raise TemplateError(f'Unsupported list syntax: {syntax}')
@@ -370,6 +379,7 @@ def _recursive_render(t_base, o_base, name, context, env):
                 if os.path.isfile(fp) and f.startswith('#'):
                     logger.debug(f'delete {f}')
                     os.remove(fp)
+            #
             logger.debug(f'done {o_path}')
     #
     else:
