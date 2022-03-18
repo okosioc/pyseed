@@ -249,6 +249,7 @@ class ModelField:
         'searchable',
         'sortable',
         'format',
+        'icon',
         'title',
         'description',
         'unit',
@@ -259,7 +260,8 @@ class ModelField:
                  name: str = None, type_: Type = None,
                  default: Any = Undefined, required: bool = Undefined,
                  editable: bool = Undefined, searchable: Comparator = Undefined, sortable: bool = Undefined,
-                 format_: Format = None, title: str = None, description: str = None, unit: str = None, alias: str = None) -> None:
+                 format_: Format = None, icon: str = None, title: str = None, description: str = None, unit: str = None,
+                 alias: str = None) -> None:
         """ Init method.
 
         :param type_: annotaion for field, e.g, str or Dict[str, str] or List[Object]
@@ -293,6 +295,7 @@ class ModelField:
             self.sortable = sortable
         #
         self.format = format_
+        self.icon = icon
         self.title = title
         self.description = description
         self.unit = unit
@@ -447,13 +450,14 @@ class ModelMeta(ABCMeta):
                     field.required = False
                 # Define a ModelField directly
                 elif isinstance(value, ModelField):
-                    # x10
+                    # x11
                     field.default = value.default
                     field.required = value.required
                     field.editable = value.editable
                     field.searchable = value.searchable
                     field.sortable = value.sortable
                     field.format = value.format
+                    field.icon = value.icon
                     field.title = value.title
                     field.description = value.description
                     field.unit = value.unit
@@ -564,6 +568,7 @@ class BaseModel(metaclass=ModelMeta):
     #
     # Fields sould be overwrited
     #
+    __icon__ = None
     __title__ = None
     __description__ = None
     # TODO: Validate all fields in layout are defined
@@ -901,7 +906,7 @@ class BaseModel(metaclass=ModelMeta):
 
         However, we still have some grammars
           - add type date
-          - add enum_titles, py_type, layout, editable to help code generation
+          - add enum_titles, py_type, layout, editable, icon to help code generation
           - Add format to array, so that we can gen a component for the whole array
           - Add searchables to object, so that it can be used to generate search form
           - Add sortables to object, so that it can be used to generate order drowpdown
@@ -976,6 +981,9 @@ class BaseModel(metaclass=ModelMeta):
                         else:
                             default = f_t.default
                             field_schema.update({'default': default})
+                    # icon
+                    if f_t.icon:
+                        field_schema.update({'icon': f_t.icon})
                     # title
                     field_schema.update({'title': f_t.title if f_t.title else f_n.upper()})
                     # description
@@ -1011,6 +1019,7 @@ class BaseModel(metaclass=ModelMeta):
                     'required': required,
                     'columns': type_.__columns__ if type_.__columns__ else required,  # Using required fields as columns as the default
                     'py_type': type_.__name__,
+                    'icon': type_.__icon__ if type_.__icon__ else None,
                     'title': type_.__title__ if type_.__title__ else type_.__name__.upper(),
                     'description': type_.__description__ if type_.__description__ else None
                 }
