@@ -245,7 +245,6 @@ class ModelField:
         'type',
         'default',
         'required',
-        'editable',
         'searchable',
         'sortable',
         'format',
@@ -259,7 +258,7 @@ class ModelField:
     def __init__(self,
                  name: str = None, type_: Type = None,
                  default: Any = Undefined, required: bool = Undefined,
-                 editable: bool = Undefined, searchable: Comparator = Undefined, sortable: bool = Undefined,
+                 searchable: Comparator = Undefined, sortable: bool = Undefined,
                  format_: Format = None, icon: str = None, title: str = None, description: str = None, unit: str = None,
                  alias: str = None) -> None:
         """ Init method.
@@ -278,11 +277,6 @@ class ModelField:
             self.required = True
         else:
             self.required = required
-        # editable is true if undefined
-        if editable is Undefined:
-            self.editable = True
-        else:
-            self.editable = editable
         # searchable is none if undefined
         if searchable is Undefined:
             self.searchable = None
@@ -450,10 +444,9 @@ class ModelMeta(ABCMeta):
                     field.required = False
                 # Define a ModelField directly
                 elif isinstance(value, ModelField):
-                    # x11
+                    # x10
                     field.default = value.default
                     field.required = value.required
-                    field.editable = value.editable
                     field.searchable = value.searchable
                     field.sortable = value.sortable
                     field.format = value.format
@@ -574,19 +567,10 @@ class BaseModel(metaclass=ModelMeta):
     # TODO: Validate all fields in layout are defined
     # Define fields can be show in query result table or card
     __columns__ = []
-    # Define
+    # Define layouts to render form or detail page
     __layout__ = None
-    #
-    # Below fields are generated using __layout__ and each field's attribute,
-    # you can also define them to overwrite the calcuated default value
-    #
-    # All fields whose searchable is not none
-    # If you would like to define it, each element can be tuple (field name, comparator) or field name
-    # e.g, [('name', Comparator.LIKE), 'status']
-    __searchables__ = []
-    # All fields with sortable is true
-    # If you would like to define it, each element must be field name
-    __sortables__ = []
+    __read__ = None
+    __form__ = None
 
     def __init__(self, *d: Dict[str, Any], **data: Any) -> None:
         """ Init.
@@ -906,7 +890,7 @@ class BaseModel(metaclass=ModelMeta):
 
         However, we still have some grammars
           - add type date
-          - add enum_titles, py_type, layout, editable, icon to help code generation
+          - add enum_titles, py_type, layout, form, read, icon to help code generation
           - Add format to array, so that we can gen a component for the whole array
           - Add searchables to object, so that it can be used to generate search form
           - Add sortables to object, so that it can be used to generate order drowpdown
@@ -1002,8 +986,6 @@ class BaseModel(metaclass=ModelMeta):
                     if f_t.required:
                         field_schema.update({'required': True})
                         required.append(f_n)
-                    # editable
-                    field_schema.update({'editable': f_t.editable})
                     # searchable
                     if f_t.searchable is not None:
                         searchables.append((f_n, f_t.searchable))
@@ -1030,15 +1012,12 @@ class BaseModel(metaclass=ModelMeta):
                     layout = [[f] for f in properties.keys()]  # Each field has one row
                 #
                 obj['layout'] = layout
+                obj['read'] = _parse_layout(type_.__read__) if type_.__read__ else layout
+                obj['form'] = _parse_layout(type_.__form__) if type_.__form__ else layout
                 # searchables
-                if type_.__searchables__:
-                    searchables = [('{}__{}'.format(*s) if isinstance(s, tuple) else s) for s in cls.__searchables__]
-                else:
-                    searchables = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
-                #
-                obj['searchables'] = searchables
+                obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
                 # sortables
-                obj['sortables'] = type_.__sortables__ if type_.__sortables__ else sortables
+                obj['sortables'] = sortables
                 #
                 return obj
             elif type_ is str:
