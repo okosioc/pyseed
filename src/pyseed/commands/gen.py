@@ -179,10 +179,10 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
                             view['params'][key] = value
                         else:
                             row = {'columns': []}
-                            if '|' in line:  # Nested column, e.g, a,b|c,d
-                                for c in line.split('|'):
+                            for c in line.split(','):
+                                if '/' in c:  # Nested column, e.g, a,b/c
                                     column = []
-                                    for cc in c.split(','):
+                                    for cc in c.split('/'):
                                         cc = cc.strip()
                                         seed = _parse_seed(cc, models)
                                         if 'model' in seed:
@@ -196,8 +196,7 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
                                         column.append(seed)
                                     #
                                     row['columns'].append(column)
-                            else:  # Single level column, e.g, a,b
-                                for c in line.split(','):
+                                else:  # Single level column, e.g, a,b,c
                                     c = c.strip()
                                     seed = _parse_seed(c, models)
                                     if 'model' in seed:
