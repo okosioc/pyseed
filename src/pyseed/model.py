@@ -898,7 +898,10 @@ class BaseModel(metaclass=ModelMeta):
         """
 
         def _parse_layout(body):
-            """ Parse layout. """
+            """ Parse layout.
+
+            Model's layout format is the same with the format of seed's layout, whose parsing logic is in /commands/gen.py
+            """
             layout = []
             rows = body.strip().splitlines()
             for r in rows:
@@ -906,7 +909,18 @@ class BaseModel(metaclass=ModelMeta):
                 if not r:  # Skip blank lines
                     continue
                 #
-                layout.append([x.strip() for x in r.split(',')])
+                columns = []
+                for c in r.split(','):
+                    if '/' in c:  # Inner column, e.g, a,b/c
+                        column = []
+                        for cc in c.split('/'):
+                            column.append(cc.strip())
+                    else:  # Single level column, e.g, a,b,c
+                        column = c.strip()
+                    #
+                    columns.append(column)
+                #
+                layout.append(columns)
             #
             return layout
 

@@ -60,7 +60,7 @@ class User(MongoModel):
     password: str = None
     intro: str = None
     avatar: str = None
-    point: int = ModelField(default=0, editable=False)
+    point: int = ModelField(default=0)
     status: UserStatus = ModelField(default=UserStatus.NORMAL, searchable=Comparator.EQ)
     roles: List[UserRole] = [UserRole.MEMBER]
 
@@ -104,7 +104,6 @@ def test_model():
     assert len(schema['columns']) == len(User.__columns__)
     assert len(schema['layout']) == 5
     assert schema['searchables'] == ['name__like', 'status']
-    assert not schema['properties']['point']['editable']
 
     # Prepare an instance of User
     now = datetime.now()

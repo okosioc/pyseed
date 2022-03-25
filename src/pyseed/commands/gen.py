@@ -266,7 +266,7 @@ def _parse_varible_value(key, value):
         try:
             value = json.loads(value)  # Need to use double quotes for string values or key names
         except ValueError as e:
-            logger.warning(f'Can not parse list or dict varible {key}={value}, use as string directly')
+            pass
     #
     return value
 

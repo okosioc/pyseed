@@ -1,6 +1,0 @@
-<div class="form-group" name="{{ field_name }}">
-    <label>{{ field_schema.title }}</label>
-    <input name="{{ field_name }}" type="string" class="form-control"
-           pattern="[0-9\.]*" {{ 'required' if field_schema.required }}
-           value="{{ '{{' }} {{ field_path }} if {{ field_path }} is not none {{ '}}' }}">
-</div>
