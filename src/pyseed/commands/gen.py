@@ -8,7 +8,6 @@
     :copyright: (c) 2021 by weiminfeng.
     :date: 2021/9/1
 """
-
 import argparse
 import importlib.util
 import json
@@ -20,6 +19,7 @@ import sys
 from typing import List
 
 import inflection
+import yaml
 from flask import request
 from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader
 from werkzeug.urls import url_quote, url_encode
@@ -94,38 +94,52 @@ def _prepare_jinja2_env():
     return env
 
 
-def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str]):
+def _gen(s: str):
     """ Gen. """
-    logger.info(f'gen {models_dir} and {seeds_dir} to {out_dir}, using {template_names}')
-    if not os.path.exists(models_dir):
-        logger.error('No models folder')
+    logger.info(f'Gen using {s}')
+    # Seed file name has seed ext
+    seed_file = f'{s}.sd'
+    if not os.path.exists(seed_file):
+        logger.error(f'Can not find seed file {seed_file}')
         return False
-    if not os.path.exists(seeds_dir):
-        logger.error('No seeds folder')
-        return False
+    # Out dir should be same with seed
+    out_dir = s
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
     #
-    # find templates from current folder
-    # TODO: Download template to current working folder
+    # Parse seed file, which is in yaml format
+    # e.g,
+    # template: kapok
+    # blueprints:
+    #   - name: dashboard
+    #     views:
+    #       - name: profile
+    #         params: {extends: cust}
+    #         layout: |-
+    #           user.info, user.security
     #
-    working_folder = os.getcwd()
-    logger.info(f'Working folder is {working_folder}')
-    templates = []
-    for g in os.listdir(working_folder):
-        p = os.path.join(working_folder, g)
-        if os.path.isdir(p) and g in template_names:
-            templates.append(g)
+    with open(seed_file) as stream:
+        try:
+            seed_content = yaml.safe_load(stream)
+            # TODO: Validate the seed content
+        except yaml.YAMLError as e:
+            logger.error(f'Can not parse seed file {seed_file}, {e}')
+            return False
     #
-    if not templates:
-        logger.error(f'Can not find any available templates by {template_names}')
+    # Get template name from seed file, and then use .name as the template folder
+    # e.g, kapok -> .kapok
+    #
+    template = '.' + seed_content['template']
+    if not os.path.exists(seed_file):
+        # TODO: Download template to the folder
+        logger.error(f'Can not find template folder {template}')
         return False
     #
     # Import models package
     # 1. Find all the models definition in models package, please import all models in __init__.py
     #
-    module_name = os.path.basename(models_dir)
-    module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(models_dir, '__init__.py'))
+    module_name = os.path.basename(out_dir)
+    module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(out_dir, '__init__.py'))
     module = importlib.util.module_from_spec(module_spec)
     sys.modules[module_name] = module
     module_spec.loader.exec_module(module)
@@ -138,11 +152,8 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
     #
     logger.info(f'Found {len(models)} registered models: {list(models.keys())}')
     #
-    # Create context using contents in seeds_dir
-    # 1. Files in seeds_dir root folder are used as layouts
-    # 2. Only contains one level sub folders and each folder will be generated to a blueprint
-    # 3. Files in each blueprint folder will be genrated to views
-    # 4. Each view file contains var lines, i.e. !key=value, and seed grids
+    # Create context using seed content
+    #
     context = {
         'models': models,  # {name: {name, schema}}}
         'layouts': [],  # [layout]
@@ -150,93 +161,70 @@ def _gen(models_dir: str, seeds_dir: str, out_dir: str, template_names: List[str
         'seeds': [],
     }
     column_set = set()
-    logger.info(f'Seeds:')
-    for d in os.listdir(seeds_dir):  # Blueprints
-        p = os.path.join(seeds_dir, d)
-        if os.path.isdir(p):
-            logger.info(f'{d}/')
-            blueprint = {'views': [], **_generate_names(d)}
-            models_by_name = {}
-            for dd in os.listdir(p):  # Views
-                view = {'blueprint': blueprint, 'rows': [], 'seeds': [], 'params': {}, **_generate_names(dd)}
-                pp = os.path.join(p, dd)
-                logger.info(f'  {dd}')
-                with open(pp) as f:  # Seeds defined in views
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        #
-                        key_value_found = re.match('^!([a-zA-Z_]+)=(.+)$', line)
-                        if key_value_found:
-                            key, value = key_value_found.groups()
-                            #
-                            # NOTES:
-                            # 1. Variables name should be in snake format, i.e, two_words
-                            # 2. Variables can be accessed in templates by view.params.field_name
-                            #
-                            value = _parse_varible_value(key, value)
-                            view['params'][key] = value
-                        else:
-                            row = {'columns': []}
-                            for c in line.split(','):
-                                if '/' in c:  # Nested column, e.g, a,b/c
-                                    column = []
-                                    for cc in c.split('/'):
-                                        cc = cc.strip()
-                                        seed = _parse_seed(cc, models)
-                                        if 'model' in seed:
-                                            models_by_name[seed['model']['name']] = seed['model']
-                                            view['seeds'].append(seed)
-                                            # Remove dulplicated column at context level, no need to do this to view level
-                                            if cc not in column_set:
-                                                context['seeds'].append(seed)
-                                                column_set.add(cc)
-                                        #
-                                        column.append(seed)
-                                    #
-                                    row['columns'].append(column)
-                                else:  # Single level column, e.g, a,b,c
-                                    c = c.strip()
-                                    seed = _parse_seed(c, models)
-                                    if 'model' in seed:
-                                        models_by_name[seed['model']['name']] = seed['model']
-                                        view['seeds'].append(seed)
-                                        if c not in column_set:  # Same as ditto
-                                            context['seeds'].append(seed)
-                                            column_set.add(c)
-                                    #
-                                    row['columns'].append(seed)
-                            #
-                            logger.info(f'    {line}')
-                            view['rows'].append(row)
+    logger.info(f'Seed file content:')
+    for bp in seed_content['blueprints']:  # Blueprints
+        bp_name = bp['name']
+        logger.info(f'{bp_name}/')
+        blueprint = {'views': [], **_generate_names(bp_name)}
+        models_by_name = {}
+        for v in bp['views']:  # Views
+            v_name = v['name']
+            v_params = v.get('params', {})
+            view = {'blueprint': blueprint, 'rows': [], 'seeds': [], 'params': v_params, **_generate_names(v_name)}
+            logger.info(f'  {v_name}')
+            # Parse layout in plain text
+            for line in v['layout'].splitlines():
+                line = line.strip()
+                if not line:
+                    continue
                 #
-                blueprint['views'].append(view)
-                blueprint['models'] = models_by_name.values()
+                row = {'columns': []}
+                for c in line.split(','):
+                    if '/' in c:  # Nested column, e.g, a,b/c
+                        column = []
+                        for cc in c.split('/'):
+                            cc = cc.strip()
+                            seed = _parse_seed(cc, models)
+                            if 'model' in seed:
+                                models_by_name[seed['model']['name']] = seed['model']
+                                view['seeds'].append(seed)
+                                # Remove dulplicated column at context level, no need to do this to view level
+                                if cc not in column_set:
+                                    context['seeds'].append(seed)
+                                    column_set.add(cc)
+                            #
+                            column.append(seed)
+                        #
+                        row['columns'].append(column)
+                    else:  # Single level column, e.g, a,b,c
+                        c = c.strip()
+                        seed = _parse_seed(c, models)
+                        if 'model' in seed:
+                            models_by_name[seed['model']['name']] = seed['model']
+                            view['seeds'].append(seed)
+                            if c not in column_set:  # Same as ditto
+                                context['seeds'].append(seed)
+                                column_set.add(c)
+                        #
+                        row['columns'].append(seed)
+                #
+                logger.info(f'    {line}')
+                view['rows'].append(row)
             #
-            context['blueprints'].append(blueprint)
-        else:
-            logger.info(f'{d}')
-            context['layouts'].append(d)
+            blueprint['views'].append(view)
+            blueprint['models'] = models_by_name.values()
+        #
+        context['blueprints'].append(blueprint)
+    #
+    # Do generation logic recursively
     #
     env = _prepare_jinja2_env()
-    #
-    # Iterate each template
-    #
-    for template in templates:
-        #
-        # Prepare paths
-        #
-        tempate_path = template
-        output_path = out_dir
-        if not os.path.exists(output_path):
-            os.mkdir(output_path)
-        logger.info(f'Generate template {template}: {tempate_path} -> {output_path}')
-        #
-        # Use depth-first to copy templates to output path, converting all the names and render in the meanwhile
-        #
-        for d in os.listdir(tempate_path):
-            _recursive_render(tempate_path, output_path, d, context, env)
+    tempate_path = template
+    output_path = out_dir
+    logger.info(f'Generate template {template}: {tempate_path} -> {output_path}')
+    # Use depth-first to copy templates to output path, converting all the names and render in the meanwhile
+    for d in os.listdir(tempate_path):
+        _recursive_render(tempate_path, output_path, d, context, env)
 
 
 def _generate_names(name):
@@ -426,31 +414,12 @@ def main(args: List[str]) -> bool:
     """ Main. """
     parser = argparse.ArgumentParser(prog="pyseed gen")
     parser.add_argument(
-        "-m",
-        nargs='?',
-        metavar='models',
-        default='./models',
-        help="Specify the models folder, default value is ./models",
-    )
-    parser.add_argument(
         "-s",
         nargs='?',
-        metavar='seeds',
-        default='./seeds',
-        help="Specify the seeds folder, default value is ./seeds",
-    )
-    parser.add_argument(
-        "-o",
-        nargs='?',
-        metavar='output',
-        default='./grows',
-        help="Specify the generation output folder, default value is ./grows",
-    )
-    parser.add_argument(
-        "-t",
-        nargs='+',
-        metavar='templates',
-        help="Specify the templates",
+        metavar='seed',
+        default='www',
+        help="Specify the seed file name, default value is www. "
+             "i.e, -s app means using seed file ./app.seed and models from ./app to generate files to ./app",
     )
     parsed_args = parser.parse_args(args)
-    return _gen(parsed_args.m, parsed_args.s, parsed_args.o, parsed_args.t)
+    return _gen(parsed_args.s)

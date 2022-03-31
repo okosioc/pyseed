@@ -144,6 +144,7 @@ class Format(SimpleEnum):
     TABLE = 'table'  # Objects in table, i.e, [{}]
     MODAL = 'modal'  # Objects with some fields in table and all fields in modal, i.e, [{}]
     GRID = 'grid'  # Objects in grid, i.e, [{}]
+    TIMELINE = 'timeline'  # Objects in timeline
     CHART = 'chart'  # Charting with series, i.e, {title, names, values}
     STATISTIC = 'statistic'  # Statistic card, i.e, {title, value, chart, children, extras}
     CASCADER = 'cascader'  # Cascade selection, i.e, List[str]
