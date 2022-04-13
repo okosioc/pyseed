@@ -891,7 +891,7 @@ class BaseModel(metaclass=ModelMeta):
 
         However, we still have some grammars
           - add type date
-          - add enum_titles, py_type, layout, form, read, icon to help code generation
+          - add enum_titles, py_type, layout, form, read, icon, stat to help code generation
           - Add format to array, so that we can gen a component for the whole array
           - Add searchables to object, so that it can be used to generate search form
           - Add sortables to object, so that it can be used to generate order drowpdown
@@ -938,6 +938,7 @@ class BaseModel(metaclass=ModelMeta):
                 })
                 return enum
             elif issubclass(type_, BaseModel):
+                stat = None
                 properties = {}
                 required, searchables, sortables = [], [], []
                 for f_n, f_t in type_.__fields__.items():
@@ -997,6 +998,8 @@ class BaseModel(metaclass=ModelMeta):
                         #
                         if f_t.format in [Format.DATE, Format.DATETIME]:
                             field_schema.update({'type': 'date'})
+                        elif f_t.format == Format.STATISTIC:
+                            stat = field_schema
                     # required
                     if f_t.required:
                         field_schema.update({'required': True})
@@ -1018,7 +1021,7 @@ class BaseModel(metaclass=ModelMeta):
                     'py_type': type_.__name__,
                     'icon': type_.__icon__ if type_.__icon__ else None,
                     'title': type_.__title__ if type_.__title__ else type_.__name__.upper(),
-                    'description': type_.__description__ if type_.__description__ else None
+                    'description': type_.__description__ if type_.__description__ else None,
                 }
                 # layout
                 if type_.__layout__:
@@ -1033,6 +1036,9 @@ class BaseModel(metaclass=ModelMeta):
                 obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
                 # sortables
                 obj['sortables'] = sortables
+                #
+                if stat:
+                    obj['stat'] = stat
                 #
                 return obj
             elif type_ is str:
