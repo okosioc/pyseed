@@ -246,6 +246,7 @@ class ModelField:
         'type',
         'default',
         'required',
+        'readonly',
         'searchable',
         'sortable',
         'format',
@@ -259,7 +260,7 @@ class ModelField:
     def __init__(self,
                  name: str = None, type_: Type = None,
                  default: Any = Undefined, required: bool = Undefined,
-                 searchable: Comparator = Undefined, sortable: bool = Undefined,
+                 readonly: bool = Undefined, searchable: Comparator = Undefined, sortable: bool = Undefined,
                  format_: Format = None, icon: str = None, title: str = None, description: str = None, unit: str = None,
                  alias: str = None) -> None:
         """ Init method.
@@ -278,6 +279,11 @@ class ModelField:
             self.required = True
         else:
             self.required = required
+        # readonly is false if undefined
+        if readonly is Undefined:
+            self.readonly = False
+        else:
+            self.readonly = readonly
         # searchable is none if undefined
         if searchable is Undefined:
             self.searchable = None
@@ -445,9 +451,10 @@ class ModelMeta(ABCMeta):
                     field.required = False
                 # Define a ModelField directly
                 elif isinstance(value, ModelField):
-                    # x10
+                    # x11
                     field.default = value.default
                     field.required = value.required
+                    field.readonly = value.readonly
                     field.searchable = value.searchable
                     field.sortable = value.sortable
                     field.format = value.format
@@ -891,7 +898,7 @@ class BaseModel(metaclass=ModelMeta):
 
         However, we still have some grammars
           - add type date
-          - add enum_titles, py_type, layout, form, read, icon, stat to help code generation
+          - add enum_titles, py_type, layout, form, read, icon, stat, readonly to help code generation
           - Add format to array, so that we can gen a component for the whole array
           - Add searchables to object, so that it can be used to generate search form
           - Add sortables to object, so that it can be used to generate order drowpdown
@@ -999,11 +1006,14 @@ class BaseModel(metaclass=ModelMeta):
                         if f_t.format in [Format.DATE, Format.DATETIME]:
                             field_schema.update({'type': 'date'})
                         elif f_t.format == Format.STATISTIC:
-                            stat = field_schema
+                            stat = f_n
                     # required
                     if f_t.required:
                         field_schema.update({'required': True})
                         required.append(f_n)
+                    # readonly
+                    if f_t.readonly:
+                        field_schema.update({'readonly': True})
                     # searchable
                     if f_t.searchable is not None:
                         searchables.append((f_n, f_t.searchable))
