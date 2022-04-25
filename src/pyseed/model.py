@@ -131,6 +131,7 @@ class Format(SimpleEnum):
     IMAGE = 'image'  # Image upload support
     AVATAR = 'avatar'  # User avatar
     FILE = 'file'  # File upload support
+    VIDEO = 'video'  # Video upload support
     IP = 'ip'
     OBJECTID = 'objectid'  # Default format for ObjectId
     CHECKBOX = 'checkbox'  # Default format for bool
