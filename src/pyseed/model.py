@@ -19,7 +19,7 @@ from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, Se
 from bson import ObjectId
 
 from .error import SchemaError, DataError, PathError
-
+from .utils import parse_layout
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Custom Types
@@ -906,33 +906,6 @@ class BaseModel(metaclass=ModelMeta):
           - Add columns to object, so that it can be used to generate columns for table
         """
 
-        def _parse_layout(body):
-            """ Parse layout.
-
-            Model's layout format is the same with the format of seed's layout, whose parsing logic is in /commands/gen.py
-            """
-            layout = []
-            rows = body.strip().splitlines()
-            for r in rows:
-                r = r.strip()
-                if not r:  # Skip blank lines
-                    continue
-                #
-                columns = []
-                for c in r.split(','):
-                    if '/' in c:  # Inner column, e.g, a,b/c
-                        column = []
-                        for cc in c.split('/'):
-                            column.append(cc.strip())
-                    else:  # Single level column, e.g, a,b,c
-                        column = c.strip()
-                    #
-                    columns.append(column)
-                #
-                layout.append(columns)
-            #
-            return layout
-
         def _gen_schema(type_: Type):
 
             """ Generate schema for type. """
@@ -1036,13 +1009,13 @@ class BaseModel(metaclass=ModelMeta):
                 }
                 # layout
                 if type_.__layout__:
-                    layout = _parse_layout(type_.__layout__)
+                    layout = parse_layout(type_.__layout__)[0]
                 else:
                     layout = [[f] for f in properties.keys()]  # Each field has one row
                 #
                 obj['layout'] = layout
-                obj['read'] = _parse_layout(type_.__read__) if type_.__read__ else layout
-                obj['form'] = _parse_layout(type_.__form__) if type_.__form__ else layout
+                obj['read'] = parse_layout(type_.__read__)[0] if type_.__read__ else layout
+                obj['form'] = parse_layout(type_.__form__)[0] if type_.__form__ else layout
                 # searchables
                 obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
                 # sortables

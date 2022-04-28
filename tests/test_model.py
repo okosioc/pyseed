@@ -81,7 +81,7 @@ class User(MongoModel):
     __layout__ = '''
     avatar
     name, email
-    point, status
+    point, status/roles
     -
     last_login
     '''
@@ -103,6 +103,8 @@ def test_model():
                'type'] == 'date'
     assert len(schema['columns']) == len(User.__columns__)
     assert len(schema['layout']) == 5
+    assert schema['layout'][0][0]['name'] == 'avatar'  # row 0, column 0
+    assert schema['layout'][2][1][0]['name'] == 'status'  # row 2, column 1, inner column 0
     assert schema['searchables'] == ['name__like', 'status']
 
     # Prepare an instance of User

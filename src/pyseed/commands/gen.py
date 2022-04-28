@@ -10,7 +10,6 @@
 """
 import argparse
 import importlib.util
-import json
 import logging
 import os
 import re
@@ -18,7 +17,6 @@ import shutil
 import sys
 from typing import List
 
-import inflection
 import yaml
 from flask import request
 from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader
@@ -26,7 +24,7 @@ from werkzeug.urls import url_quote, url_encode
 
 from pyseed import registered_models
 from pyseed.error import TemplateError
-from pyseed.utils import work_in
+from pyseed.utils import work_in, generate_names, parse_layout
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +146,7 @@ def _gen(s: str):
     #
     models = {}
     for m in registered_models:
-        models[m.__name__] = {'schema': m.schema(), **_generate_names(m.__name__)}
+        models[m.__name__] = {'schema': m.schema(), **generate_names(m.__name__)}
     #
     logger.info(f'Found {len(models)} registered models: {list(models.keys())}')
     #
@@ -160,56 +158,27 @@ def _gen(s: str):
         'blueprints': [],  # [blueprint]
         'seeds': [],
     }
-    column_set = set()
+    seed_set = set()
     logger.info(f'Seed file content:')
     for bp in seed_content['blueprints']:  # Blueprints
         bp_name = bp['name']
         logger.info(f'{bp_name}/')
-        blueprint = {'views': [], **_generate_names(bp_name)}
+        blueprint = {'views': [], **generate_names(bp_name)}
         models_by_name = {}
         for v in bp['views']:  # Views
             v_name = v['name']
-            v_params = v.get('params', {})
-            view = {'blueprint': blueprint, 'rows': [], 'seeds': [], 'params': v_params, **_generate_names(v_name)}
             logger.info(f'  {v_name}')
-            # Parse layout in plain text
-            for line in v['layout'].splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                #
-                row = {'columns': []}
-                for c in line.split(','):
-                    if '/' in c:  # Nested column, e.g, a,b/c
-                        column = []
-                        for cc in c.split('/'):
-                            cc = cc.strip()
-                            seed = _parse_seed(cc, models)
-                            if 'model' in seed:
-                                models_by_name[seed['model']['name']] = seed['model']
-                                view['seeds'].append(seed)
-                                # Remove dulplicated column at context level, no need to do this to view level
-                                if cc not in column_set:
-                                    context['seeds'].append(seed)
-                                    column_set.add(cc)
-                            #
-                            column.append(seed)
-                        #
-                        row['columns'].append(column)
-                    else:  # Single level column, e.g, a,b,c
-                        c = c.strip()
-                        seed = _parse_seed(c, models)
-                        if 'model' in seed:
-                            models_by_name[seed['model']['name']] = seed['model']
-                            view['seeds'].append(seed)
-                            if c not in column_set:  # Same as ditto
-                                context['seeds'].append(seed)
-                                column_set.add(c)
-                        #
-                        row['columns'].append(seed)
-                #
-                logger.info(f'    {line}')
-                view['rows'].append(row)
+            rows, seeds = parse_layout(v['layout'])
+            view = {'blueprint': blueprint, 'rows': rows, 'seeds': seeds, 'params': v.get('params', {}), **generate_names(v_name)}
+            for seed in seeds:
+                seed_name = seed['name']
+                # Remove dulplicated seed at context level
+                if seed_name not in seed_set:
+                    context['seeds'].append(seed)
+                    seed_set.add(seed_name)
+                # Remove dulplicated model at blueprint level
+                seed_model = seed['model']
+                models_by_name[seed_model['name']] = seed_model
             #
             blueprint['views'].append(view)
             blueprint['models'] = models_by_name.values()
@@ -225,69 +194,6 @@ def _gen(s: str):
     # Use depth-first to copy templates to output path, converting all the names and render in the meanwhile
     for d in os.listdir(tempate_path):
         _recursive_render(tempate_path, output_path, d, context, env)
-
-
-def _generate_names(name):
-    """ Generate names. """
-    name_wo_dot = name.replace('.', '-')  # e.g, plan.members-form -> plan-members-form
-    return {
-        'name': name,  # => SampleModel
-        'name_lower': name.lower(),  # => samplemodel
-        'name_kebab': inflection.dasherize(inflection.underscore(name_wo_dot)),  # => sample-model
-        'name_camel': inflection.camelize(name_wo_dot, uppercase_first_letter=False),  # => sampleModel
-        'name_snake': inflection.underscore(name_wo_dot),  # => sample_model
-        'name_snake_plural': inflection.tableize(name_wo_dot),  # => sample_models
-        'name_title': inflection.titleize(name_wo_dot),  # => Sample Model
-    }
-
-
-def _parse_varible_value(key, value):
-    """ Parse value accordig to the key. """
-    key = key.lower()
-    value = value.strip()
-    if key.startswith('has_') or key.startswith('is_'):
-        if value.lower() in ['1', 'true', 'yes']:
-            value = True
-        else:
-            value = False
-    elif value.startswith('[') or value.startswith('{'):
-        try:
-            value = json.loads(value)  # Need to use double quotes for string values or key names
-        except ValueError as e:
-            pass
-    #
-    return value
-
-
-def _parse_seed(column, models):
-    """ Parse column and return seed if any, e.g, post-query, post-read, user-form?is_horizontal=true.
-
-    model-action?params
-    """
-    # Params
-    params = {}
-    if '?' in column:
-        column, query = column.split('?')
-        for p in query.split('&'):
-            key, value = p.split('=')
-            params[key] = _parse_varible_value(key, value)
-    # model-action-suffix
-    # Suffix is used to distinguish seeds with different params, e.g,
-    #   user-form-0?is_horizontal=true
-    #   user-form-1?is_horizontal=false
-    tokens = column.split('-')
-    name = tokens[0]
-    sub = None
-    # Sub model and only support one level sub model
-    if '.' in name:
-        name, sub = name.split('.')
-    # Find model by name
-    found = next((m for n, m in models.items() if n.lower() == name.lower()), None)
-    if found:
-        action = tokens[1]
-        return {'model': found, 'sub': sub, 'action': action, 'params': params, **_generate_names(column)}
-    else:
-        return {'params': params, **_generate_names(column)}
 
 
 def _recursive_render(t_base, o_base, name, context, env):
