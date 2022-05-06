@@ -14,8 +14,8 @@ from typing import List, Tuple, Any
 
 from importlib_metadata import version, entry_points
 
-import pyseed
-from pyseed.log import configure_logger
+import py3seed
+from py3seed.log import configure_logger
 
 
 def list_dependencies_and_versions() -> List[Tuple[str, str]]:
@@ -41,7 +41,7 @@ def main() -> Any:
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s version {} ({})".format(pyseed.__version__, dep_versions()),
+        version="%(prog)s version {} ({})".format(py3seed.__version__, dep_versions()),
     )
     parser.add_argument(
         '-v', '--verbose',

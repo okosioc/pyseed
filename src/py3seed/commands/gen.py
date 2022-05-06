@@ -26,7 +26,7 @@ from .. import registered_models
 from ..error import TemplateError
 from ..utils import work_in, generate_names, parse_layout
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('pyseed')
 
 
 def _prepare_jinja2_env():
@@ -167,8 +167,12 @@ def _gen(s: str):
         models_by_name = {}
         for v in bp['views']:  # Views
             v_name = v['name']
-            logger.info(f'  {v_name}')
-            rows, seeds = parse_layout(v['layout'], models.values())
+            logger.info(f'  {v_name}/')
+            rows, seeds = parse_layout(v['layout'], models)
+            for r in rows:
+                rs = ', '.join(map(lambda x: x['name'], r))
+                logger.info(f'    {rs}')
+            #
             view = {'blueprint': blueprint, 'rows': rows, 'seeds': seeds, 'params': v.get('params', {}), **generate_names(v_name)}
             for seed in seeds:
                 seed_name = seed['name']

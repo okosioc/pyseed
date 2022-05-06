@@ -11,7 +11,7 @@
 
 import pytest
 
-from pyseed import connect
+from py3seed import connect
 
 
 @pytest.fixture(scope='module')

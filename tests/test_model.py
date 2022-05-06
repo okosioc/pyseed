@@ -15,7 +15,7 @@ from typing import List, Dict, ForwardRef
 
 import pytest
 
-from pyseed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel, ModelField, Comparator
+from py3seed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel, ModelField, Comparator
 
 
 class UserRole(SimpleEnum):
@@ -81,9 +81,10 @@ class User(MongoModel):
     __layout__ = '''
     avatar
     name, email
-    point, (status, roles)
+    password,
+    point#4, (status, roles)#8
     -
-    $#4, (last_login, posts)#8
+    $#4, (last_login?is_x=true#6, posts#6)?is_y=true#8
     '''
     __indexes__ = [{'fields': ['email'], 'unique': True}]
 
@@ -103,16 +104,18 @@ def test_model():
     assert schema['properties']['posts']['items']['properties']['comments']['items']['properties']['date'][
                'type'] == 'date'
     assert len(schema['columns']) == len(User.__columns__)
-    assert len(schema['layout']) == 5
+    assert len(schema['layout']) == 6
     assert schema['layout'][0][0]['name'] == 'avatar'  # row 0, column 0
-    assert schema['layout'][2][1]['name'] == 'status, roles'
-    assert schema['layout'][2][1]['children'][0]['name'] == 'status'  # row 2, column 1, children 0
-    assert schema['layout'][4][0]['name'] == '$'  # row 4, column 0
-    assert schema['layout'][4][0]['span'] == 4
-    assert schema['layout'][4][1]['name_kebab'] == 'last-login-posts'  # row 4, column 1
-    assert schema['layout'][4][1]['name_snake'] == 'last_login_posts'
-    assert schema['layout'][4][1]['span'] == 8
-    assert schema['layout'][4][1]['children'][1]['name'] == 'posts'  # row 2, column 1, children 1
+    assert schema['layout'][3][1]['name'] == 'status, roles'
+    assert schema['layout'][3][1]['span'] == 8
+    assert schema['layout'][3][1]['children'][0]['name'] == 'status'  # row 2, column 1, children 0
+    assert schema['layout'][5][0]['name'] == '$'  # row 4, column 0
+    assert schema['layout'][5][0]['span'] == 4
+    assert schema['layout'][5][1]['name_kebab'] == 'last-login-is-x-true-6-posts-6'  # row 4, column 1
+    assert schema['layout'][5][1]['name_snake'] == 'last_login_is_x_true_6_posts_6'
+    assert schema['layout'][5][1]['span'] == 8
+    assert schema['layout'][5][1]['children'][1]['name'] == 'posts'  # row 2, column 1, children 1
+    assert schema['layout'][5][1]['children'][1]['span'] == 6
     assert schema['searchables'] == ['name__like', 'status']
 
     # Prepare an instance of User

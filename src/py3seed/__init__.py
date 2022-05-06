@@ -3,7 +3,7 @@
     __init__.py
     ~~~~~~~~~~~~~~
 
-    Package pyseed.
+    Package py3seed.
 
     :copyright: (c) 2020 by weiminfeng.
     :date: 2021/8/10

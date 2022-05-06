@@ -12,7 +12,7 @@
 import pytest
 from pymongo.errors import DuplicateKeyError
 
-from pyseed import DataError
+from py3seed import DataError
 from .test_model import User
 
 
