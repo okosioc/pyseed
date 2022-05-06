@@ -12,6 +12,7 @@
 import contextlib
 import json
 import os
+import re
 import shutil
 import stat
 
@@ -53,15 +54,15 @@ def work_in(dirname=None):
 
 def generate_names(name):
     """ Generate names, which can be used directly in code generation. """
-    name_wo_dot = name.replace('.', '-')  # e.g, plan.members-form -> plan-members-form
+    name_hyphen = re.sub(r'[.,]', '-', re.sub(r'[\s]', '', name))  # e.g, plan.members-form -> plan-members-form
     return {
         'name': name,  # => SampleModel
         'name_lower': name.lower(),  # => samplemodel
-        'name_kebab': inflection.dasherize(inflection.underscore(name_wo_dot)),  # => sample-model
-        'name_camel': inflection.camelize(name_wo_dot, uppercase_first_letter=False),  # => sampleModel
-        'name_snake': inflection.underscore(name_wo_dot),  # => sample_model
-        'name_snake_plural': inflection.tableize(name_wo_dot),  # => sample_models
-        'name_title': inflection.titleize(name_wo_dot),  # => Sample Model
+        'name_kebab': inflection.dasherize(inflection.underscore(name_hyphen)),  # => sample-model
+        'name_camel': inflection.camelize(name_hyphen, uppercase_first_letter=False),  # => sampleModel
+        'name_snake': inflection.underscore(name_hyphen),  # => sample_model
+        'name_snake_plural': inflection.tableize(name_hyphen),  # => sample_models
+        'name_title': inflection.titleize(name_hyphen),  # => Sample Model
     }
 
 
@@ -79,10 +80,27 @@ def parse_layout(body, models=[]):
     layout: |=
       user-summary, user.timeline-read
     """
+    # Returns
+    # Rows are [column], while column is {name:str, params:{}, span:int, children:[column], model:{name:str, schema:{}}}
+    rows, seeds = [], []
+
+    # Match span
+    span_regex = re.compile(r'^(.*)#([0-9]+)$')
+    # Match bracket
+    bracke_regex = re.compile(r'^[\(](.*)[\)]')
+    # Use a negative lookahead to match all the commas which are not inside the parenthesis
+    comma_regex = re.compile(r',\s*(?![^()]*\))')
 
     def _parse_column(column_str):
         """ Parse column string. """
-        # Parse params
+        column_str = column_str.strip()
+        ret = {}
+        # Parse span after #, i.e, a#4,(b,c)#8
+        span_match = span_regex.match(column_str)
+        if span_match:
+            column_str = span_match.group(1)
+            ret.update({'span': int(span_match.group(2))})
+        # Parse params, i.e, a?is_card=true,(b,c)?is_tab=true
         params = {}
         if '?' in column_str:
             column_str, query = column_str.split('?')
@@ -90,24 +108,34 @@ def parse_layout(body, models=[]):
                 key, value = p.split('=')
                 params[key] = _parse_varible_value(key, value)
         #
-        ret = {'params': params, **generate_names(column_str)}
-        # If is seed file's view layout, parse model and action
-        if models:
-            # model-action-suffix
-            # Suffix is used to distinguish seeds with different params, e.g,
-            #   user-form-0?is_horizontal=true
-            #   user-form-1?is_horizontal=false
-            tokens = column_str.split('-')
-            name = tokens[0]
-            sub = None
-            # Sub model and only support one level sub model
-            if '.' in name:
-                name, sub = name.split('.')
-            # Find model by name
-            found = next((m for n, m in models.items() if n.lower() == name.lower()), None)
-            if found:
-                action = tokens[1]
-                ret.update({'model': found, 'sub': sub, 'action': action})
+        ret.update({'params': params})
+        #
+        bracket_match = bracke_regex.match(column_str)
+        if bracket_match:  # Inner column, e.g, a,(b,c)
+            name = bracket_match.group(1)
+            ret.update({'children': [_parse_column(cs) for cs in name.split(',')]})
+        else:  # Single level column, e.g, a,b,c
+            name = column_str
+            # If is seed file's view layout, parse model and action
+            if models:
+                # model-action-suffix
+                # Suffix is used to distinguish seeds with different params, e.g,
+                #   user-form-0?is_horizontal=true
+                #   user-form-1?is_horizontal=false
+                tokens = column_str.split('-')
+                name = tokens[0]
+                sub = None
+                # Sub model and only support one level sub model
+                if '.' in name:
+                    name, sub = name.split('.')
+                # Find model by name
+                found = next((m for n, m in models.items() if n.lower() == name.lower()), None)
+                if found:
+                    action = tokens[1]
+                    ret.update({'model': found, 'sub': sub, 'action': action})
+                    seeds.append(ret)
+        #
+        ret.update(generate_names(name))
         #
         return ret
 
@@ -128,32 +156,14 @@ def parse_layout(body, models=[]):
         #
         return value
 
-    # rows are [{} or [{}]], seeds are columns with a model
-    rows, seeds = [], []
+    #
     lines = body.strip().splitlines()
     for line in lines:
         line = line.strip()
         if not line:  # Skip blank lines
             continue
         #
-        row = []
-        for c in line.split(','):
-            if '/' in c:  # Inner column, e.g, a,b/c
-                column = []
-                for cc in c.split('/'):
-                    cc = cc.strip()
-                    col = _parse_column(cc)
-                    column.append(col)
-                    if 'model' in col:
-                        seeds.append(col)
-            else:  # Single level column, e.g, a,b,c
-                c = c.strip()
-                column = _parse_column(c)
-                if 'model' in column:
-                    seeds.append(column)
-            #
-            row.append(column)
-        #
+        row = [_parse_column(c) for c in comma_regex.split(line)]
         rows.append(row)
     #
     return rows, seeds

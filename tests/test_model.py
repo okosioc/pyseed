@@ -60,7 +60,7 @@ class User(MongoModel):
     password: str = None
     intro: str = None
     avatar: str = None
-    point: int = ModelField(default=0)
+    point: int = ModelField(readonly=True, default=0)
     status: UserStatus = ModelField(default=UserStatus.NORMAL, searchable=Comparator.EQ)
     roles: List[UserRole] = [UserRole.MEMBER]
 
@@ -81,9 +81,9 @@ class User(MongoModel):
     __layout__ = '''
     avatar
     name, email
-    point, status/roles
+    point, (status, roles)
     -
-    last_login
+    $#4, (last_login, posts)#8
     '''
     __indexes__ = [{'fields': ['email'], 'unique': True}]
 
@@ -94,6 +94,7 @@ def test_model():
     schema = User.schema()
     assert schema['type'] == 'object'
     assert schema['properties']['_id']['py_type'] == 'ObjectId'
+    assert schema['properties']['point']['readonly']
     assert schema['properties']['status']['enum'] == list(UserStatus)
     assert schema['properties']['sibling']['$ref'] == '#'
     assert schema['properties']['siblings']['type'] == 'array'
@@ -104,7 +105,14 @@ def test_model():
     assert len(schema['columns']) == len(User.__columns__)
     assert len(schema['layout']) == 5
     assert schema['layout'][0][0]['name'] == 'avatar'  # row 0, column 0
-    assert schema['layout'][2][1][0]['name'] == 'status'  # row 2, column 1, inner column 0
+    assert schema['layout'][2][1]['name'] == 'status, roles'
+    assert schema['layout'][2][1]['children'][0]['name'] == 'status'  # row 2, column 1, children 0
+    assert schema['layout'][4][0]['name'] == '$'  # row 4, column 0
+    assert schema['layout'][4][0]['span'] == 4
+    assert schema['layout'][4][1]['name_kebab'] == 'last-login-posts'  # row 4, column 1
+    assert schema['layout'][4][1]['name_snake'] == 'last_login_posts'
+    assert schema['layout'][4][1]['span'] == 8
+    assert schema['layout'][4][1]['children'][1]['name'] == 'posts'  # row 2, column 1, children 1
     assert schema['searchables'] == ['name__like', 'status']
 
     # Prepare an instance of User

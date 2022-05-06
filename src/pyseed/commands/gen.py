@@ -168,7 +168,7 @@ def _gen(s: str):
         for v in bp['views']:  # Views
             v_name = v['name']
             logger.info(f'  {v_name}')
-            rows, seeds = parse_layout(v['layout'])
+            rows, seeds = parse_layout(v['layout'], models.values())
             view = {'blueprint': blueprint, 'rows': rows, 'seeds': seeds, 'params': v.get('params', {}), **generate_names(v_name)}
             for seed in seeds:
                 seed_name = seed['name']
