@@ -54,7 +54,7 @@ def work_in(dirname=None):
 
 def generate_names(name):
     """ Generate names, which can be used directly in code generation. """
-    name_hyphen = re.sub(r'[.,]', '-', re.sub(r'[\s]', '', name))  # e.g, plan.members-form -> plan-members-form
+    name_hyphen = re.sub(r'[.,]', '-', ''.join(name.split()))  # e.g, plan.members-form -> plan-members-form
     return {
         'name': name,  # => SampleModel
         'name_lower': name.lower(),  # => samplemodel
@@ -113,7 +113,7 @@ def parse_layout(body, models=[]):
         bracket_match = bracke_regex.match(column_str)
         if bracket_match:  # Inner column, e.g, a,(b,c)
             name = bracket_match.group(1)
-            ret.update({'children': [_parse_column(cs) for cs in name.split(',')]})
+            ret.update({'children': [_parse_column(cs) for cs in comma_regex.split(name)]})
         else:  # Single level column, e.g, a,b,c
             name = column_str
             # If is seed file's view layout, parse model and action
@@ -133,6 +133,7 @@ def parse_layout(body, models=[]):
                 if found:
                     action = tokens[1]
                     ret.update({'model': found, 'sub': sub, 'action': action})
+                    # Append to return seeds
                     seeds.append(ret)
         #
         ret.update(generate_names(name))

@@ -22,9 +22,9 @@ from flask import request
 from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader
 from werkzeug.urls import url_quote, url_encode
 
-from pyseed import registered_models
-from pyseed.error import TemplateError
-from pyseed.utils import work_in, generate_names, parse_layout
+from .. import registered_models
+from ..error import TemplateError
+from ..utils import work_in, generate_names, parse_layout
 
 logger = logging.getLogger(__name__)
 
