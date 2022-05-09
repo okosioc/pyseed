@@ -106,14 +106,16 @@ def test_model():
     assert len(schema['columns']) == len(User.__columns__)
     assert len(schema['layout']) == 6
     assert schema['layout'][0][0]['name'] == 'avatar'  # row 0, column 0
-    assert schema['layout'][3][1]['name'] == 'status, roles'
+    assert schema['layout'][3][1]['name'] == 'status+roles'  # row 3, column 1
+    assert schema['layout'][3][1]['name_snake'] == 'status_roles'
     assert schema['layout'][3][1]['span'] == 8
     assert schema['layout'][3][1]['children'][0]['name'] == 'status'  # row 2, column 1, children 0
     assert schema['layout'][5][0]['name'] == '$'  # row 4, column 0
     assert schema['layout'][5][0]['span'] == 4
-    assert schema['layout'][5][1]['name_kebab'] == 'last-login-is-x-true-6-posts-6'  # row 4, column 1
-    assert schema['layout'][5][1]['name_snake'] == 'last_login_is_x_true_6_posts_6'
+    assert schema['layout'][5][1]['name'] == 'last_login+posts'  # row 4, column 1
+    assert schema['layout'][5][1]['name_kebab'] == 'last-login-posts'
     assert schema['layout'][5][1]['span'] == 8
+    assert schema['layout'][5][1]['children'][0]['params']['is_x']  # row 2, column 1, children 0
     assert schema['layout'][5][1]['children'][1]['name'] == 'posts'  # row 2, column 1, children 1
     assert schema['layout'][5][1]['children'][1]['span'] == 6
     assert schema['searchables'] == ['name__like', 'status']

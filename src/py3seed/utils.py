@@ -55,7 +55,7 @@ def work_in(dirname=None):
 def generate_names(name):
     """ Generate names, which can be used directly in code generation. """
     if name:
-        name_hyphen = re.sub(r'[.,?=#]', '-', ''.join(name.split()))  # e.g, plan.members-form -> plan-members-form
+        name_hyphen = re.sub(r'[.,?=#+]', '-', ''.join(name.split()))  # e.g, plan.members-form -> plan-members-form
         return {
             'name': name,  # => SampleModel
             'name_lower': name.lower(),  # => samplemodel
@@ -110,7 +110,11 @@ def parse_layout(body, models={}):
         if bracket_match:  # Inner column, e.g, a,(b,c)
             column_str = bracket_match.group(1)
             query_str = bracket_match.group(2)
-            ret.update({'children': [_parse_column(cs) for cs in comma_regex.split(column_str)]})
+            children = [_parse_column(cs) for cs in comma_regex.split(column_str)]
+            ret.update({'children': children})
+            # Join children's name
+            # e.g, a,(b?p=1,c#6) -> b+c
+            column_str = '+'.join(map(lambda x: x['name'], children))
         else:  # Single level column, e.g, a,b,c
             if '?' in column_str:
                 column_str, query_str = column_str.split('?')
