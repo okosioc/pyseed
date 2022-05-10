@@ -140,7 +140,6 @@ class Format(SimpleEnum):
     LINK = 'link'  # Text input with an extenral link
     TIME = 'time'  # Time picker
     # Below values are used for inner model/dict or list of model/dict
-    LIST = 'list'  # Objects in list, i.e, [{}]
     TAB = 'tab'  # Objects with tabs nav, i.e, [{}]
     TABLE = 'table'  # Objects in table, i.e, [{}]
     MODAL = 'modal'  # Objects with some fields in table and all fields in modal, i.e, [{}]
