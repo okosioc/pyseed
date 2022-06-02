@@ -123,7 +123,7 @@ def parse_layout(body, models={}):
             # If is seed file's view layout, parse model and action
             if models:
                 # model-action-suffix
-                # Suffix is used to distinguish seeds with different params, e.g,
+                # Suffix is used to distinguish seeds with different params, e.g:
                 #   user-form-0?is_horizontal=true
                 #   user-form-1?is_horizontal=false
                 tokens = column_str.split('-')

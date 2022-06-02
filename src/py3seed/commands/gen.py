@@ -78,16 +78,32 @@ def _prepare_jinja2_env():
         args = request.args.copy()
         for key, value in new_values.items():
             args[key] = value
-        return '{}?{}'.format(request.path, url_encode(args))
+        return url_encode(args)
 
     def new_model(class_name):
         """ New a model by class name. """
         klass = globals()[class_name]
         return klass()
 
+    def match_field(fields, matcher):
+        """ Get the first matching field from columns.
+
+        :param fields - list of field name
+        :param matcher - name|title|\w+_name
+        """
+        matcher = re.compile(matcher if matcher.startswith('(') else f'({matcher})')
+        if isinstance(fields, dict):
+            fields = fields.keys()
+        #
+        for f in fields:
+            if matcher.match(f):
+                return f
+        # If no matching, return nothing
+        return None
+
     env.globals['update_query'] = update_query
     env.globals['new_model'] = new_model
-
+    env.globals['match_field'] = match_field
     #
     return env
 
