@@ -123,7 +123,7 @@ def _gen(s: str):
     #
     # Parse seed file, which is in yaml format
     # e.g,
-    # template: kapok
+    # template: apple
     # blueprints:
     #   - name: dashboard
     #     views:
@@ -140,13 +140,13 @@ def _gen(s: str):
             logger.error(f'Can not parse seed file {seed_file}, {e}')
             return False
     #
-    # Get template name from seed file, and then use .name as the template folder
-    # e.g, kapok -> .kapok
+    # Get template name from seed file, and then use .name/seed name as the template folder, as one template can support many platforms
+    # e.g, app.sd using template apple -> .apple/app/
     #
-    template = '.' + seed_content['template']
-    if not os.path.exists(seed_file):
+    template_path = os.path.join('.' + seed_content['template'], s)
+    if not os.path.exists(template_path):
         # TODO: Download template to the folder
-        logger.error(f'Can not find template folder {template}')
+        logger.error(f'Can not find template folder {template_path}')
         return False
     #
     # Import models package
@@ -208,12 +208,11 @@ def _gen(s: str):
     # Do generation logic recursively
     #
     env = _prepare_jinja2_env()
-    tempate_path = template
     output_path = out_dir
-    logger.info(f'Generate template {template}: {tempate_path} -> {output_path}')
+    logger.info(f'Generate template {template_path} -> {output_path}')
     # Use depth-first to copy templates to output path, converting all the names and render in the meanwhile
-    for d in os.listdir(tempate_path):
-        _recursive_render(tempate_path, output_path, d, context, env)
+    for d in os.listdir(template_path):
+        _recursive_render(template_path, output_path, d, context, env)
 
 
 def _recursive_render(t_base, o_base, name, context, env):

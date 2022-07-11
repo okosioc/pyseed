@@ -21,6 +21,7 @@ from bson import ObjectId
 from .error import SchemaError, DataError, PathError
 from .utils import parse_layout
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 # Custom Types
 #
@@ -1006,12 +1007,8 @@ class BaseModel(metaclass=ModelMeta):
                     'title': type_.__title__ if type_.__title__ else type_.__name__.upper(),
                     'description': type_.__description__ if type_.__description__ else None,
                 }
-                # layout
-                if type_.__layout__:
-                    layout = parse_layout(type_.__layout__)[0]
-                else:
-                    layout = [[f] for f in properties.keys()]  # Each field has one row
-                #
+                # layout, if not defined, each field has one row
+                layout = parse_layout(type_.__layout__ if type_.__layout__ else '\n'.join(properties.keys()))[0]
                 obj['layout'] = layout
                 obj['read'] = parse_layout(type_.__read__)[0] if type_.__read__ else layout
                 obj['form'] = parse_layout(type_.__form__)[0] if type_.__form__ else layout

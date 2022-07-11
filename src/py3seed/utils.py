@@ -78,7 +78,7 @@ def parse_layout(body, models={}):
     e.g,
     1) layout in a model
     __layout__ = '''
-    $, info/password
+    $, (info, password)
     logs
     '''
     2) layout of a view in seed file
@@ -86,7 +86,7 @@ def parse_layout(body, models={}):
       user-summary, user.timeline-read
     """
     # Returns
-    # Rows are [column], while column is {name:str, params:{}, span:int, children:[column], model:{name:str, schema:{}}}
+    # Rows are [column], while column should be {name:str, params:{}, span:int, children:[column], model:{name:str, schema:{}}}
     rows, seeds = [], []
 
     # Match span
