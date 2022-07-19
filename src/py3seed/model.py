@@ -140,12 +140,15 @@ class Format(SimpleEnum):
     HIDDEN = 'hidden'  # Hidden input
     LINK = 'link'  # Text input with an extenral link
     TIME = 'time'  # Time picker
+    METRIC = 'metric'  # Statistic card for simple or object
     # Below values are used for inner model/dict or list of model/dict
     TAB = 'tab'  # Objects with tabs nav, i.e, [{}]
     TABLE = 'table'  # Objects in table, i.e, [{}]
     MODAL = 'modal'  # Objects with some fields in table and all fields in modal, i.e, [{}]
     GRID = 'grid'  # Objects in grid, i.e, [{}]
-    TIMELINE = 'timeline'  # Objects in timeline
+    TIMELINE = 'timeline'  # Objects in timeline, i.e, [{}]
+    CALENDAR = 'calendar'  # Objects in calendar, i.e, [{}]
+    MEDIA = 'media'  # Objects in media components like blog comments, tweets and the like, i.e, [{}]
     CHART = 'chart'  # Charting with series, i.e, {title, names, values}
     STATISTIC = 'statistic'  # Statistic card, i.e, {title, value, chart, children, extras}
     CASCADER = 'cascader'  # Cascade selection, i.e, List[str]

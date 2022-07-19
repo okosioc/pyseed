@@ -117,9 +117,12 @@ def _gen(s: str):
         logger.error(f'Can not find seed file {seed_file}')
         return False
     # Out dir should be same with seed
-    out_dir = s
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir)
+    # e.g,
+    #   app.sd -> app
+    #   miniapp.sd -> miniapp
+    output_path = s
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
     #
     # Parse seed file, which is in yaml format
     # e.g,
@@ -152,8 +155,8 @@ def _gen(s: str):
     # Import models package
     # 1. Find all the models definition in models package, please import all models in __init__.py
     #
-    module_name = os.path.basename(out_dir)
-    module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(out_dir, '__init__.py'))
+    module_name = os.path.basename(output_path)
+    module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(output_path, '__init__.py'))
     module = importlib.util.module_from_spec(module_spec)
     sys.modules[module_name] = module
     module_spec.loader.exec_module(module)
@@ -208,7 +211,6 @@ def _gen(s: str):
     # Do generation logic recursively
     #
     env = _prepare_jinja2_env()
-    output_path = out_dir
     logger.info(f'Generate template {template_path} -> {output_path}')
     # Use depth-first to copy templates to output path, converting all the names and render in the meanwhile
     for d in os.listdir(template_path):
