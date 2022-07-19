@@ -258,6 +258,9 @@ class ModelField:
         'title',
         'description',
         'unit',
+        'prefix',
+        'suffix',
+        'status',
         'alias',
     )
 
@@ -266,6 +269,7 @@ class ModelField:
                  default: Any = Undefined, required: bool = Undefined,
                  readonly: bool = Undefined, searchable: Comparator = Undefined, sortable: bool = Undefined,
                  format_: Format = None, icon: str = None, title: str = None, description: str = None, unit: str = None,
+                 prefix: str = None, suffix: str = None, status: str = None,
                  alias: str = None) -> None:
         """ Init method.
 
@@ -304,6 +308,11 @@ class ModelField:
         self.title = title
         self.description = description
         self.unit = unit
+        #
+        self.prefix = prefix
+        self.suffix = suffix
+        self.status = status
+        #
         self.alias = alias
 
     def __str__(self):
@@ -455,7 +464,7 @@ class ModelMeta(ABCMeta):
                     field.required = False
                 # Define a ModelField directly
                 elif isinstance(value, ModelField):
-                    # x11
+                    # x14
                     field.default = value.default
                     field.required = value.required
                     field.readonly = value.readonly
@@ -466,6 +475,9 @@ class ModelMeta(ABCMeta):
                     field.title = value.title
                     field.description = value.description
                     field.unit = value.unit
+                    field.prefix = value.prefix
+                    field.suffix = value.suffix
+                    field.status = value.status
                     field.alias = value.alias
                 # Set default value
                 else:
@@ -973,9 +985,18 @@ class BaseModel(metaclass=ModelMeta):
                     # description
                     if f_t.description:
                         field_schema.update({'description': f_t.description})
-                    # unit
+                    # unit/prefix/suffix/status
                     if f_t.unit:
                         field_schema.update({'unit': f_t.unit})
+                    #
+                    if f_t.prefix:
+                        field_schema.update({'prefix': f_t.prefix})
+                    #
+                    if f_t.suffix:
+                        field_schema.update({'suffix': f_t.suffix})
+                    #
+                    if f_t.status:
+                        field_schema.update({'status': f_t.status})
                     # format, overwrite default format
                     if f_t.format:
                         field_schema.update({'format': f_t.format})
