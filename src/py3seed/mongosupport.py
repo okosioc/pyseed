@@ -162,6 +162,8 @@ class MongoModel(BaseModel):
     # pymongo.Collection, can use it to invode pymongo's methods directly
     # https://api.mongodb.com/python/current/tutorial.html
     __collection__ = None
+    # Specify the name of the collection, or using the plural of the model's class name
+    __collection_name__ = None
 
     # MongoDB alias, use it to support multi database
     # if None DEFAULT_CONNECTION_NAME
@@ -186,7 +188,7 @@ class MongoModel(BaseModel):
             read_preference = kwargs.get("read_preference") or ReadPreference.PRIMARY
             write_concern = kwargs.get("write_concern") or WriteConcern(w=1)
             # Use model name + s as connection name, so please make sure model name is unique
-            collection_name = cls.__name__.lower() + 's'
+            collection_name = cls.__collection_name__ if cls.__collection_name__ else (cls.__name__.lower() + 's')
             cls.__collection__ = db[collection_name].with_options(read_preference=read_preference,
                                                                   write_concern=write_concern)
             # Try to create index when getting collection
