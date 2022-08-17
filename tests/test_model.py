@@ -14,8 +14,9 @@ from datetime import datetime
 from typing import List, Dict, ForwardRef
 
 import pytest
+from bson import ObjectId
 
-from py3seed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel, ModelField, Comparator
+from py3seed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel, ModelField, Comparator, RelationField
 
 
 class UserRole(SimpleEnum):
@@ -53,6 +54,14 @@ class Post(BaseModel):
     comments: List[Comment] = None
 
 
+class Team(MongoModel):
+    """ Team definition. """
+    name: str
+    #
+    update_time: datetime = None
+    create_time: datetime = datetime.now
+
+
 class User(MongoModel):
     """ User definition. """
     name: str = ModelField(searchable=Comparator.LIKE)
@@ -64,11 +73,8 @@ class User(MongoModel):
     status: UserStatus = ModelField(default=UserStatus.NORMAL, searchable=Comparator.EQ)
     roles: List[UserRole] = [UserRole.MEMBER]
 
-    sibling: ForwardRef('User') = None  # Self-referenced by string
+    sibling: ForwardRef('User') = None  # Self-referenced
     siblings: List[ForwardRef('User')] = None
-
-    update_time: datetime = None
-    create_time: datetime = datetime.now
 
     last_login: LastLogin = None
 
@@ -76,6 +82,13 @@ class User(MongoModel):
 
     l: List[str] = None
     d: Dict[str, str] = None
+
+    # Required is true by default, which means a user should have a team
+    team: Team = RelationField(back_field_name='members', back_field_is_list=True, back_field_order=[('team_join_time', 1)])
+    team_join_time: datetime = None
+
+    update_time: datetime = None
+    create_time: datetime = datetime.now
 
     __columns__ = ['avatar', 'name', 'email', 'status', 'create_time']
     __layout__ = '''
@@ -97,9 +110,9 @@ def test_model():
     assert schema['properties']['_id']['py_type'] == 'ObjectId'
     assert schema['properties']['point']['readonly']
     assert schema['properties']['status']['enum'] == list(UserStatus)
-    assert schema['properties']['sibling']['$ref'] == '#'
+    assert schema['properties']['sibling']['$ref'] == '#User'
     assert schema['properties']['siblings']['type'] == 'array'
-    assert schema['properties']['siblings']['items']['$ref'] == '#'
+    assert schema['properties']['siblings']['items']['$ref'] == '#User'
     assert schema['properties']['posts']['items']['properties']['title']['type'] == 'string'
     assert schema['properties']['posts']['items']['properties']['comments']['items']['properties']['date'][
                'type'] == 'date'
@@ -120,9 +133,17 @@ def test_model():
     assert schema['layout'][5][1]['children'][1]['span'] == 6
     assert schema['searchables'] == ['name__like', 'status']
 
+    # Relation schema
+    assert schema['properties']['team_id']['py_type'] == 'ObjectId'
+    assert schema['properties']['team']['properties']['name']['type'] == 'string'
+    team_schema = Team.schema()
+    assert team_schema['properties']['members']['type'] == 'array'
+    assert 'email' in team_schema['properties']['members']['items']['properties']
+
     # Prepare an instance of User
     now = datetime.now()
-    usr = User()
+    team = Team(_id=ObjectId(), name='dev')
+    usr = User(team=team)
 
     # Test default values
     assert usr.point == 0
@@ -131,15 +152,14 @@ def test_model():
     assert len(usr.l) == 0
 
     # Test referencing modal
-    usr.last_login.ip = '127.0.0.1'
-    usr.last_login.time = now
+    usr.last_login = LastLogin(ip='127.0.0.1', time=now)
     assert usr.last_login.ip == '127.0.0.1'
 
     # Test self-referencing
-    usr.sibling = User(name='sibling', email='sibling')
+    usr.sibling = User(name='sibling', email='sibling', team=team)
     usr.siblings = [
-        User(name='sibling-0', email='sibling-0'),
-        User(name='sibling-1', email='sibling-1'),
+        User(name='sibling-0', email='sibling-0', team=team),
+        User(name='sibling-1', email='sibling-1', team=team),
     ]
     assert type(usr.sibling) == User
     assert type(usr.siblings[0]) == User

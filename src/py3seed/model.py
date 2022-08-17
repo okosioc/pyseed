@@ -14,8 +14,9 @@ import sys
 from abc import ABCMeta
 from copy import deepcopy
 from datetime import datetime
-from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, Set, Any, ForwardRef, List
+from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, Set, Any, ForwardRef, List, Tuple
 
+import inflection
 from bson import ObjectId
 
 from .error import SchemaError, DataError, PathError
@@ -150,7 +151,6 @@ class Format(SimpleEnum):
     CALENDAR = 'calendar'  # Objects in calendar, i.e, [{}]
     MEDIA = 'media'  # Objects in media components like blog comments, tweets and the like, i.e, [{}]
     CHART = 'chart'  # Charting with series, i.e, {title, names, values}
-    STATISTIC = 'statistic'  # Statistic card, i.e, {title, value, chart, children, extras}
     CASCADER = 'cascader'  # Cascade selection, i.e, List[str]
     LATLNG = 'latlng'  # LatLng chooser, i.e, List[float]
 
@@ -240,11 +240,11 @@ class Validator:
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Model field
+# Field
 #
 
 class ModelField:
-    """ Field definition for model. """
+    """ Field definition. """
     __slots__ = (
         'name',
         'type',
@@ -258,15 +258,15 @@ class ModelField:
         'title',
         'description',
         'unit',
-        'alias',
+        'source_field_name',
     )
 
     def __init__(self,
                  name: str = None, type_: Type = None,
-                 default: Any = Undefined, required: bool = Undefined,
-                 readonly: bool = Undefined, searchable: Comparator = Undefined, sortable: bool = Undefined,
+                 default: Any = Undefined, required: bool = Undefined, readonly: bool = Undefined,
+                 searchable: Comparator = Undefined, sortable: bool = Undefined,
                  format_: Format = None, icon: str = None, title: str = None, description: str = None, unit: str = None,
-                 alias: str = None) -> None:
+                 source_field_name: str = None):
         """ Init method.
 
         :param type_: annotaion for field, e.g, str or Dict[str, str] or List[Object]
@@ -304,10 +304,59 @@ class ModelField:
         self.title = title
         self.description = description
         self.unit = unit
-        self.alias = alias
+        #
+        self.source_field_name = source_field_name
 
     def __str__(self):
         return f'{self.name}/{self.type}/{self.default}/{self.required}/{self.format}'
+
+
+class RelationField(ModelField):
+    """ Relation field definition. """
+
+    __slots__ = ModelField.__slots__ + (
+        'save_field_name',
+        'save_field_order',
+        'back_field_name',
+        'back_field_is_list',
+        'back_field_order',
+        'back_field_format',
+        'back_field_icon',
+        'back_field_title',
+        'back_field_description',
+        'back_field_unit',
+        'is_back_field',
+    )
+
+    def __init__(self,
+                 name: str = None, type_: Type = None,
+                 save_field_name: str = Undefined, save_field_order: List[Tuple[str, int]] = [],
+                 back_field_name: str = None, back_field_is_list: bool = False, back_field_order: List[Tuple[str, int]] = [],
+                 back_field_format: Format = None, back_field_icon: str = None, back_field_title: str = None,
+                 back_field_description: str = None, back_field_unit: str = None, is_back_field: bool = False,
+                 **kwargs):
+        """ Init method.
+
+        :param save_field_name: The name to use for saving current relation
+        :param save_field_order: If the field is List, use this order when loading and saving
+        :param back_field_name: The name to use for the relation from the related object back to this one
+        :param back_field_is_list: If back field is list
+        :param back_field_order: If back field is list, use this order when loading and saving
+        :param is_back_field: If its a back field defined in related object
+        """
+        super().__init__(name, type_, **kwargs)
+        # x12
+        self.save_field_name = save_field_name
+        self.save_field_order = save_field_order
+        self.back_field_name = back_field_name
+        self.back_field_is_list = back_field_is_list
+        self.back_field_order = back_field_order
+        self.back_field_format = back_field_format
+        self.back_field_icon = back_field_icon
+        self.back_field_title = back_field_title
+        self.back_field_description = back_field_description
+        self.back_field_unit = back_field_unit
+        self.is_back_field = is_back_field
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -366,18 +415,29 @@ class ModelMeta(ABCMeta):
 
     @no_type_check
     def __new__(mcs, name, bases, namespace, **kwargs):
-        """ Create and return a new object. """
+        """ Create and return a new object.
+
+        :param bases: Only contains current class' direct parents
+        :param namespace: Only contains the fields of current object
+        """
         fields: Dict[str, ModelField] = {}
         relations: Dict[str, relation] = {}
         properties: Dict[str, property] = {}
         # TODO: Support callable validators
         slots: Set[str] = namespace.get('__slots__', ())
         slots = {slots} if isinstance(slots, str) else set(slots)
+        # Using for self-referencing, so we that we can remove all ForwardRef just after the class is created
+        # If use ForwardRef('other_class_name'), we do not have appropriate timing to replace it to its real class
+        # as we do not know if it is created or not
         has_forward_refs = False
         #
         for base in reversed(bases):
             if issubclass(base, BaseModel) and base is not BaseModel:
                 fields.update(deepcopy(base.__fields__))
+            # Id field's type should be defined in BaseModel/MongoModel, so we need to fetch them from bases
+            if '__id_type__' not in namespace:
+                namespace['__id_type__'] = base.__id_type__
+                namespace['__id_name__'] = base.__id_name__
 
         def _validate_annotation(field_name, field_type):
             """ Validate field definition.
@@ -427,12 +487,16 @@ class ModelMeta(ABCMeta):
                 pass
             elif check_type not in AUTHORIZED_TYPES:
                 raise SchemaError(f'{field_name}: {check_type} is not an authorized type')
+            #
+            return check_type, origin
 
         # Validation
         skips = set()
         if namespace.get('__qualname__') != 'BaseModel':
             #
-            # Annotations(Fields), similar to typing.get_type_hints
+            # Iterate each annotation(field)
+            # Similar to typing.get_type_hints, https://docs.python.org/3/library/typing.html
+            # But we can not use get_type_hints() here as it tries to create class from ForwardRef
             #
             annotations = namespace.get('__annotations__', {})
             for ann_name, ann_type in annotations.items():
@@ -441,36 +505,54 @@ class ModelMeta(ABCMeta):
                     skips.add(ann_name)
                     continue
                 # Validate
-                _validate_annotation(ann_name, ann_type)
-                # Create model field
-                field = ModelField(name=ann_name, type_=ann_type)
+                _, f_origin = _validate_annotation(ann_name, ann_type)
+                # Create another field for RelationField
+                save_field = None
+                #
                 value = namespace.get(ann_name, Undefined)
                 # Field is required if undefined
                 if value is Undefined:
-                    field.default = None
-                    field.required = True
+                    field = ModelField(name=ann_name, type_=ann_type, default=None, required=True)
                 # Field is NOT required
                 elif value is None:
-                    field.default = None
+                    field = ModelField(name=ann_name, type_=ann_type, default=None, required=False)
+                # Define a RelationField
+                elif isinstance(value, RelationField):
+                    field = value
+                    field.name = ann_name
+                    field.type = ann_type
+                    # When save_field is underfined in this object, it will go to its default setting logic
+                    if field.save_field_name is Undefined:
+                        if f_origin is list:
+                            field.save_field_name = ann_name + '_ids'
+                        else:
+                            field.save_field_name = ann_name + '_id'
+                    # Create the save field
+                    # Please note: if it is none means it is the auto-created back relation in related object
+                    id_type = namespace.get('__id_type__')
+                    save_field = ModelField(
+                        name=field.save_field_name, type_=List[id_type] if f_origin is list else id_type,
+                        required=field.required,
+                        source_field_name=ann_name,  # Mark the source field
+                    )
+                    # Set required to false
                     field.required = False
-                # Define a ModelField directly
+                    # back_field should always has a meaningful value
+                    # if it is none, this field's object name is used, e.g, user.team -> team.users
+                    if field.back_field_name is None:
+                        field.back_field_name = name.lower()
+                        if field.back_field_is_list:
+                            field.back_field_name = inflection.pluralize(field.back_field_name)
+                # Define a ModelField
                 elif isinstance(value, ModelField):
-                    # x11
-                    field.default = value.default
-                    field.required = value.required
-                    field.readonly = value.readonly
-                    field.searchable = value.searchable
-                    field.sortable = value.sortable
-                    field.format = value.format
-                    field.icon = value.icon
-                    field.title = value.title
-                    field.description = value.description
-                    field.unit = value.unit
-                    field.alias = value.alias
+                    # Supplement field's name and type, as we use annotation to define a model field
+                    # e.g, name: str = Field(title='User Name'), so need to mannaully set name/str here
+                    field = value
+                    field.name = ann_name
+                    field.type = ann_type
                 # Set default value
                 else:
-                    field.default = value
-                    field.required = True
+                    field = ModelField(name=ann_name, type_=ann_type, default=value, required=True)
                 # check default value type
                 if field.default is not None:
                     if isinstance(ann_type, SimpleEnumMeta):
@@ -486,6 +568,8 @@ class ModelMeta(ABCMeta):
                             raise SchemaError(f'{ann_name}: {ann_type} default value is invalid')
                 #
                 fields[ann_name] = field
+                if save_field is not None:
+                    fields[save_field.name] = save_field
             #
             # Relations & Properties
             #
@@ -503,11 +587,12 @@ class ModelMeta(ABCMeta):
             """ Check all the fields recrusively. """
             nonlocal max_list_depth
             max_list_depth = max(max_list_depth, level)
-            origin = get_origin(field_type)
+            #
+            origin_ = get_origin(field_type)
             is_in_list = False
-            if origin is dict:
+            if origin_ is dict:
                 _, check_type = get_args(field_type)
-            elif origin is list:
+            elif origin_ is list:
                 check_type = get_args(field_type)[0]
                 is_in_list = True
             else:
@@ -518,8 +603,7 @@ class ModelMeta(ABCMeta):
             elif isinstance(check_type, SimpleEnumMeta):
                 pass
             elif issubclass(check_type, BaseModel):
-                # We do not use typing.get_type_hints() here
-                # As the method converts str to ForwardRef, but we are now using ForwardRef() directly
+                #
                 for a_n, a_t in check_type.__dict__.get('__annotations__', {}).items():
                     _iter(a_n, a_t, level + (1 if is_in_list else 0))
 
@@ -550,17 +634,41 @@ class ModelMeta(ABCMeta):
             for f in cls.__fields__.values():
                 f_origin = get_origin(f.type)
                 if f_origin is dict:
-                    _, typ = get_args(f.type)
-                    if typ.__class__ == ForwardRef:
-                        f.type = Dict[evaluate_forward_ref(typ, globalns)]
+                    _, f_type = get_args(f.type)
+                    if f_type.__class__ == ForwardRef:
+                        f.type = Dict[evaluate_forward_ref(f_type, globalns)]
                 elif f_origin is list:
-                    typ = get_args(f.type)[0]
-                    if typ.__class__ == ForwardRef:
-                        f.type = List[evaluate_forward_ref(typ, globalns)]
+                    f_type = get_args(f.type)[0]
+                    if f_type.__class__ == ForwardRef:
+                        f.type = List[evaluate_forward_ref(f_type, globalns)]
                 else:
-                    typ = f.type
-                    if typ.__class__ == ForwardRef:
-                        f.type = evaluate_forward_ref(typ, globalns)
+                    f_type = f.type
+                    if f_type.__class__ == ForwardRef:
+                        f.type = evaluate_forward_ref(f_type, globalns)
+        #
+        # Try to create back field of relation fields after this class is created
+        #
+        for f in cls.__fields__.values():
+            if isinstance(f, RelationField):
+                back_field = RelationField(
+                    name=f.back_field_name, type_=List[cls] if f.back_field_is_list else cls,
+                    save_field_name=f.save_field_name, save_field_order=f.back_field_order,
+                    required=False, readonly=True,  # Relation field is lazy loaded, so it is not required
+                    format_=f.back_field_format, icon=f.back_field_icon, title=f.back_field_title, description=f.back_field_description,
+                    unit=f.back_field_unit,
+                    is_back_field=True,  # Mark this field to be a back field created by a relation field
+                )
+                f_origin = get_origin(f.type)
+                if f_origin is dict:
+                    _, f_type = get_args(f.type)
+                elif f_origin is list:
+                    f_type = get_args(f.type)[0]
+                else:
+                    f_type = f.type
+                # Update related model
+                f_type.__fields__[f.back_field_name] = back_field
+                f_type.__slots__ = tuple(f_type.__slots__) + (f.back_field_name,)
+
         #
         return cls
 
@@ -571,7 +679,11 @@ class BaseModel(metaclass=ModelMeta):
     __slots__ = ('__dict__', '__errors__')
     __doc__ = ''
     #
-    # Fields sould be overwrited
+    # Fields may be overwrited
+    #
+    # The id field name
+    __id_name__ = '_id'
+    __id_type__ = ObjectId
     #
     __icon__ = None
     __title__ = None
@@ -612,6 +724,32 @@ class BaseModel(metaclass=ModelMeta):
         # Validate against schema
         # print(f'Validate {cls.__name__} with {data}')
         for field_name, field_type in cls.__fields__.items():
+            # Skip relation field's validation
+            if isinstance(field_type, RelationField):
+                continue
+            #
+            # Update id/ids field created by relation field
+            # But can not do update in back relation field
+            # e.g,
+            # user.team -> team.members, team_id is saved in user model, we can use user.team = another team to update it
+            # However, it is not supported to update by team.members.append(user), because it is complex to implement this:
+            #   Remember which users are removed and appended from team
+            #   Add transaction support to update these users before updating team object
+            #
+            if field_type.source_field_name is not None:
+                relation_value = data.get(field_type.source_field_name, Undefined)
+                # RelationField's value is lazy loaded, undefined means it is not load, so trust the value in current field
+                if relation_value is Undefined:
+                    pass
+                # If it is not Undefined, means it is already loaded and may be updated programmtically, so overwrite current field
+                else:
+                    if isinstance(relation_value, list):
+                        update_value = [getattr(v, cls.__id_name__) for v in relation_value]
+                    else:
+                        update_value = getattr(relation_value, cls.__id_name__)
+                    #
+                    data[field_name] = update_value
+            #
             field_value, field_errors = cls._validate_field(field_type, data.get(field_name, Undefined))
             if field_value is not Undefined:
                 values[field_name] = field_value
@@ -728,23 +866,71 @@ class BaseModel(metaclass=ModelMeta):
         del self.__dict__[name]
 
     def __getattr__(self, name):
-        """ Try to init a field if it is not in self.__dict__. """
+        """ Try to init a field if it is not in self.__dict__.
+
+        Note: When an attribute is accessed, __getattribute__ is invoked firstly
+        and then if the attribute wasn't found, __getattr__ should be invoked.
+        """
         if name in self.__class__.__fields__:
-            type_ = self.__class__.__fields__[name].type
-            origin = get_origin(type_)
-            v = None
-            if origin is None:
-                if issubclass(type_, BaseModel):
-                    v = type_()
-            elif origin is list:
-                v = []
-            elif origin is dict:
-                v = {}
+            field = self.__class__.__fields__[name]
+            f_type = field.type
+            f_origin = get_origin(f_type)
+            # Try to init relation values lazy
+            if isinstance(field, RelationField):
+                # TODO: filter param is in mongodb's format, maybe more abstract approach is needed
+                if f_origin is None:
+                    # This is a back field created by relation field, means id is saved in the relation object
+                    if field.is_back_field:
+                        default = f_type.find_one({field.save_field_name: self.__dict__.get(f_type.__id_name__)})
+                    else:
+                        default = f_type.find_one({f_type.__id_name__: self.__dict__.get(field.save_field_name)})
+                elif f_origin is list:
+                    l_type = get_args(f_type)[0]
+                    # This is a back field created by relation field, means this object id is saved in many relation objects
+                    if field.is_back_field:
+                        # Typical many-to-one definition way, i.e, using a foreign key to store related object's id
+                        # In such case, may return very big amount of object so we only fetch part of it, i.e, 100 records
+                        # e.g,
+                        # Relation field is defined in User using field name team, so the team id stores in a field name team_id
+                        # Below back relation field auto-created in Team
+                        #   members: List[User] -> User.find({team_id, self._id}, sort=[{team.join_time, 1}])
+                        default = list(
+                            l_type.find(
+                                {field.save_field_name: self.__dict__.get(l_type.__id_name__)},
+                                sort=field.save_field_order,
+                                limit=100)
+                        )
+                    else:
+                        # Please note: Databases like mongodb supports list format field
+                        # In such case, the ids field should not be very large, so we fetch all the objects and sort them by id's position
+                        # e.g,
+                        # Relation field is defined in Team using field name members, so the team ids store in a field name members_ids
+                        #   members: List[User] -> User.find({_id: {$in: self.members_ids}})
+                        ids = self.__dict__.get(field.save_field_name)
+                        default = list(l_type.find({l_type.__id_name__: {'$in': ids}}))
+                        default.sort(key=lambda i: ids.index(getattr(i, l_type.__id_name__)))
+                elif f_origin is dict:
+                    default = None
+                # If relation return None, we need to set the field to None
+                # So that in the second access on the field, we can return None directly
+                # This is a key step to implement the lazy loading for relation field
+                self.__setattr__(name, default)
+            else:
+                if f_origin is None:
+                    default = None
+                    if issubclass(f_type, BaseModel):
+                        # Do not create inner model automatically
+                        # defalut = type_()
+                        pass
+                elif f_origin is list:
+                    default = []
+                elif f_origin is dict:
+                    default = {}
+                #
+                if default is not None:
+                    self.__setattr__(name, default)
             #
-            if v is not None:
-                self.__setattr__(name, v)
-            #
-            return v
+            return default
         # Because __dict__ is overwrited by values, so we need invoke relation mannaully
         if name in self.__class__.__relations__:
             rel = self.__class__.__relations__[name]
@@ -837,16 +1023,12 @@ class BaseModel(metaclass=ModelMeta):
     ):
         """ Access model recrusively. """
         for field_name, field_value in self.__dict__.items():
-            #
-            yield field_name, self._get_value(field_value, to_dict,
-                                              encode, include, exclude, include_relations)
-        #
-        if include_relations:
-            for relation_name in self.__class__.__relations__:
-                relation_value = getattr(self, relation_name)
-                # Note: Prevent infinite recursion on calling relations
-                yield relation_name, self._get_value(relation_value, to_dict,
-                                                     encode, include, exclude, False)
+            field = self.__class__.__fields__[field_name]
+            if isinstance(field, RelationField):
+                if include_relations:
+                    yield field_name, getattr(self, field_name)
+            else:
+                yield field_name, self._get_value(field_value, to_dict, encode, include, exclude, include_relations)
 
     def _get_value(
             self, v,
@@ -859,18 +1041,12 @@ class BaseModel(metaclass=ModelMeta):
         """ Access model field recrusively. """
         if isinstance(v, dict):
             return {
-                k_: self._get_value(v_, to_dict, encode,
-                                    include,
-                                    exclude,
-                                    include_relations)
+                k_: self._get_value(v_, to_dict, encode, include, exclude, include_relations)
                 for k_, v_ in v.items()
             }
         elif isinstance(v, list):
             return [
-                self._get_value(v_, to_dict, encode,
-                                include,
-                                exclude,
-                                include_relations)
+                self._get_value(v_, to_dict, encode, include, exclude, include_relations)
                 for i, v_ in enumerate(v)
             ]
         elif isinstance(v, BaseModel):
@@ -884,6 +1060,7 @@ class BaseModel(metaclass=ModelMeta):
                     return str(v)
                 elif isinstance(v, datetime):
                     return v.strftime(DATETIME_FORMAT_SHORT)
+            #
             return v
 
     def json(self, **kwargs) -> str:
@@ -902,15 +1079,17 @@ class BaseModel(metaclass=ModelMeta):
 
         However, we still have some grammars
           - add type date
-          - add enum_titles, py_type, layout, form, read, icon, stat, readonly to help code generation
+          - add enum_titles, py_type, layout, form, read, icon, readonly to help code generation
           - Add format to array, so that we can gen a component for the whole array
           - Add searchables to object, so that it can be used to generate search form
           - Add sortables to object, so that it can be used to generate order drowpdown
           - Add columns to object, so that it can be used to generate columns for table
         """
 
-        def _gen_schema(type_: Type):
+        # Prevent recursive referencing
+        parsed_models = set()
 
+        def _gen_schema(type_: Type):
             """ Generate schema for type. """
             if isinstance(type_, SimpleEnumMeta):
                 enum = _gen_schema(type_.type)
@@ -922,7 +1101,9 @@ class BaseModel(metaclass=ModelMeta):
                 })
                 return enum
             elif issubclass(type_, BaseModel):
-                stat = None
+                #
+                parsed_models.add(type_.__name__)
+                #
                 properties = {}
                 required, searchables, sortables = [], [], []
                 for f_n, f_t in type_.__fields__.items():
@@ -935,12 +1116,12 @@ class BaseModel(metaclass=ModelMeta):
                     # List
                     elif origin is list:
                         l_type = get_args(f_t.type)[0]
-                        # https://json-schema.org/understanding-json-schema/structuring.html#recursion
-                        # Self-referencing
-                        if l_type == type_:
+                        if l_type.__name__ in parsed_models:
                             field_schema.update({
                                 'type': 'array',
-                                'items': {'$ref': '#'},
+                                # https://json-schema.org/understanding-json-schema/structuring.html#recursion
+                                # Your program should replace the {$ref:} with reference object's schema
+                                'items': {'$ref': f'#{l_type.__name__}'},
                                 'py_type': f'List[{type_.__name__}]',
                             })
                         else:
@@ -952,8 +1133,14 @@ class BaseModel(metaclass=ModelMeta):
                             })
                     # built-in type, SimpleEnum or sub model
                     else:
-                        if f_t.type == type_:  # Self-referencing
-                            field_schema.update({'$ref': '#'})
+                        if f_t.type.__name__ in parsed_models:
+                            field_schema.update({
+                                'type': 'object',
+                                # Your program should replace the {$ref:} with properties of reference object's schema only
+                                # But should NOT overwrite the icon/title/description/... as these fields may use different values
+                                '$ref': f'#{f_t.type.__name__}',
+                                'py_type': f_t.type.__name__,
+                            })
                         else:
                             inner_type = _gen_schema(f_t.type)
                             field_schema.update(inner_type)
@@ -982,8 +1169,6 @@ class BaseModel(metaclass=ModelMeta):
                         #
                         if f_t.format in [Format.DATE, Format.DATETIME]:
                             field_schema.update({'type': 'date'})
-                        elif f_t.format == Format.STATISTIC:
-                            stat = f_n
                     # required
                     if f_t.required:
                         field_schema.update({'required': True})
@@ -1020,9 +1205,6 @@ class BaseModel(metaclass=ModelMeta):
                 # sortables
                 obj['sortables'] = sortables
                 #
-                if stat:
-                    obj['stat'] = stat
-                #
                 return obj
             elif type_ is str:
                 return {'type': 'string', 'format': Format.TEXT, 'py_type': 'str'}
@@ -1040,5 +1222,4 @@ class BaseModel(metaclass=ModelMeta):
         #
         ret = _gen_schema(cls)
         # print(json.dumps(ret))
-        #
         return ret

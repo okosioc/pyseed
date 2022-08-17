@@ -132,8 +132,10 @@ def parse_layout(body, models={}):
                 # Sub model and only support one level sub model
                 if '.' in model_name:
                     model_name, sub = model_name.split('.')
-                # Find model by name
-                found = next((m for n, m in models.items() if n.lower() == model_name.lower()), None)
+                # Find model by name, ignoring cases and underlines
+                found = next(
+                    (m for n, m in models.items() if n.lower() in [model_name.lower(), inflection.camelize(model_name).lower()]), None
+                )
                 if found:
                     action = tokens[1]
                     ret.update({'model': found, 'sub': sub, 'action': action})

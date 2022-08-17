@@ -205,7 +205,7 @@ class MongoModel(BaseModel):
             unique = False
             if 'unique' in index:
                 unique = index.pop('unique')
-
+            #
             given_fields = index.pop("fields", list())
             if isinstance(given_fields, str):
                 fields = [(given_fields, pymongo.ASCENDING)]
@@ -215,7 +215,6 @@ class MongoModel(BaseModel):
                     if isinstance(field, str):
                         field = (field, pymongo.ASCENDING)
                     fields.append(field)
-
             # print('Creating index for {}'.format(str(given_fields)))
             collection.create_index(fields, unique=unique, **index)
 
@@ -290,15 +289,32 @@ class MongoModel(BaseModel):
     @classmethod
     def find_by_ids(cls, ids, *args, **kwargs):
         """ Find many models by multi ObjectIds. """
-        filter = {}
+        filter_ = {}
         if 'filter' in kwargs:
-            filter.update(kwargs.pop('filter'))
+            filter_.update(kwargs.pop('filter'))
         elif len(args) > 0:
-            filter.update(args.pop(0))
-        filter.update({'_id': {'$in': ids}})
-        records = list(cls.find(filter, *args, **kwargs))
+            filter_.update(args.pop(0))  # The first args should be filter format, i.e, {}
+        #
+        filter_.update({'_id': {'$in': ids}})
+        #
+        records = list(cls.find(filter_, *args, **kwargs))
         records.sort(key=lambda i: ids.index(i._id))
+        #
         return records
+
+    @classmethod
+    def find_by_id(cls, id_, *args, **kwargs):
+        """ Find one model by id. """
+        collection = cls.get_collection(**kwargs)
+        # If condition is None, pymongo will return the first document from collection, this may cause unexpected problems,
+        if id_ is None:
+            return None
+        #
+        doc = collection.find_one(id_, *args, **kwargs)
+        if doc:
+            return cls(doc)
+        else:
+            return None
 
     @classmethod
     def count(cls, filter=None, **kwargs):
@@ -566,7 +582,7 @@ def populate_model(multidict, model_cls, set_default=True):
             converted_value = convert_from_string(value, t)
         #
         d[key] = converted_value
-
+    #
     d = _multidict_decode(d)
     return model_cls(d)
 
@@ -664,4 +680,5 @@ def convert_from_string(string_value, t):
         converter = type_converters[t]
     else:
         converter = type_converters[None]
+    #
     return converter._convert_from_string(string_value, t)
