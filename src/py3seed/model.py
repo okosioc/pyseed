@@ -432,12 +432,14 @@ class ModelMeta(ABCMeta):
         has_forward_refs = False
         #
         for base in reversed(bases):
-            if issubclass(base, BaseModel) and base is not BaseModel:
-                fields.update(deepcopy(base.__fields__))
-            # Id field's type should be defined in BaseModel/MongoModel, so we need to fetch them from bases
-            if '__id_type__' not in namespace:
-                namespace['__id_type__'] = base.__id_type__
-                namespace['__id_name__'] = base.__id_name__
+            if issubclass(base, BaseModel):  # True if base is BaseModel or its subclass
+                # BaseModel do not have __fields__ currently
+                if base is not BaseModel:
+                    fields.update(deepcopy(base.__fields__))
+                # Id field's type should be defined in BaseModel/MongoModel, so we need to fetch them from bases
+                if '__id_type__' not in namespace:
+                    namespace['__id_type__'] = base.__id_type__
+                    namespace['__id_name__'] = base.__id_name__
 
         def _validate_annotation(field_name, field_type):
             """ Validate field definition.
@@ -691,10 +693,25 @@ class BaseModel(metaclass=ModelMeta):
     # TODO: Validate all fields in layout are defined
     # Define fields can be show in query result table or card
     __columns__ = []
-    # Define layouts to render form or detail page
+    # Define layouts to render read or form page
     __layout__ = None
     __read__ = None
     __form__ = None
+    # field groups, which can be included by index in layout
+    # e.g,
+    # __groups__ = [
+    #   '''
+    #   name, status
+    #   phone
+    #   ''',
+    #   '''
+    #   password
+    #   ''',
+    # ]
+    # __read__ = '''
+    #   $, (0, 1)
+    # '''
+    __groups__ = []
 
     def __init__(self, *d: Dict[str, Any], **data: Any) -> None:
         """ Init.
@@ -879,7 +896,7 @@ class BaseModel(metaclass=ModelMeta):
             if isinstance(field, RelationField):
                 # TODO: filter param is in mongodb's format, maybe more abstract approach is needed
                 if f_origin is None:
-                    # This is a back field created by relation field, means id is saved in the relation object
+                    # This is a back field created by relation field, means id is saved in one relation object
                     if field.is_back_field:
                         default = f_type.find_one({field.save_field_name: self.__dict__.get(f_type.__id_name__)})
                     else:
@@ -907,8 +924,11 @@ class BaseModel(metaclass=ModelMeta):
                         # Relation field is defined in Team using field name members, so the team ids store in a field name members_ids
                         #   members: List[User] -> User.find({_id: {$in: self.members_ids}})
                         ids = self.__dict__.get(field.save_field_name)
-                        default = list(l_type.find({l_type.__id_name__: {'$in': ids}}))
-                        default.sort(key=lambda i: ids.index(getattr(i, l_type.__id_name__)))
+                        if ids is None:
+                            default = []
+                        else:
+                            default = list(l_type.find({l_type.__id_name__: {'$in': ids}}))
+                            default.sort(key=lambda i: ids.index(getattr(i, l_type.__id_name__)))
                 elif f_origin is dict:
                     default = None
                 # If relation return None, we need to set the field to None
@@ -916,12 +936,11 @@ class BaseModel(metaclass=ModelMeta):
                 # This is a key step to implement the lazy loading for relation field
                 self.__setattr__(name, default)
             else:
+                default = None
                 if f_origin is None:
-                    default = None
                     if issubclass(f_type, BaseModel):
-                        # Do not create inner model automatically
-                        # defalut = type_()
-                        pass
+                        # Create inner model automatically
+                        default = f_type()
                 elif f_origin is list:
                     default = []
                 elif f_origin is dict:
@@ -1086,13 +1105,10 @@ class BaseModel(metaclass=ModelMeta):
           - Add columns to object, so that it can be used to generate columns for table
         """
 
-        # Prevent recursive referencing
-        parsed_models = set()
-
-        def _gen_schema(type_: Type):
+        def _gen_schema(type_: Type, parents=[]):
             """ Generate schema for type. """
             if isinstance(type_, SimpleEnumMeta):
-                enum = _gen_schema(type_.type)
+                enum = _gen_schema(type_.type, parents)
                 enum.update({
                     'enum': list(type_),
                     'enum_titles': type_.titles,
@@ -1101,8 +1117,11 @@ class BaseModel(metaclass=ModelMeta):
                 })
                 return enum
             elif issubclass(type_, BaseModel):
-                #
-                parsed_models.add(type_.__name__)
+                # Need to prevent recursively access
+                # e.g,
+                #   User.friends:User == #User
+                #   User.team:Team -> Team.members:List[User] == List[#User]
+                check_parents = [type_.__name__] + parents
                 #
                 properties = {}
                 required, searchables, sortables = [], [], []
@@ -1116,7 +1135,7 @@ class BaseModel(metaclass=ModelMeta):
                     # List
                     elif origin is list:
                         l_type = get_args(f_t.type)[0]
-                        if l_type.__name__ in parsed_models:
+                        if l_type.__name__ in check_parents:
                             field_schema.update({
                                 'type': 'array',
                                 # https://json-schema.org/understanding-json-schema/structuring.html#recursion
@@ -1125,7 +1144,7 @@ class BaseModel(metaclass=ModelMeta):
                                 'py_type': f'List[{type_.__name__}]',
                             })
                         else:
-                            inner_type = _gen_schema(l_type)
+                            inner_type = _gen_schema(l_type, check_parents)
                             field_schema.update({
                                 'type': 'array',
                                 'items': inner_type,
@@ -1133,7 +1152,7 @@ class BaseModel(metaclass=ModelMeta):
                             })
                     # built-in type, SimpleEnum or sub model
                     else:
-                        if f_t.type.__name__ in parsed_models:
+                        if f_t.type.__name__ in check_parents:
                             field_schema.update({
                                 'type': 'object',
                                 # Your program should replace the {$ref:} with properties of reference object's schema only
@@ -1142,7 +1161,7 @@ class BaseModel(metaclass=ModelMeta):
                                 'py_type': f_t.type.__name__,
                             })
                         else:
-                            inner_type = _gen_schema(f_t.type)
+                            inner_type = _gen_schema(f_t.type, check_parents)
                             field_schema.update(inner_type)
                     # default
                     if f_t.default:
@@ -1200,6 +1219,7 @@ class BaseModel(metaclass=ModelMeta):
                 obj['layout'] = layout
                 obj['read'] = parse_layout(type_.__read__)[0] if type_.__read__ else layout
                 obj['form'] = parse_layout(type_.__form__)[0] if type_.__form__ else layout
+                obj['groups'] = [parse_layout(g) for g in type_.__groups__]
                 # searchables
                 obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
                 # sortables

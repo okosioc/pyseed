@@ -13,6 +13,7 @@ import re
 from copy import deepcopy
 from datetime import datetime
 
+import inflection
 import pymongo
 from bson import ObjectId
 from pymongo import MongoClient, uri_parser, ReadPreference, WriteConcern
@@ -564,7 +565,8 @@ def populate_model(multidict, model_cls, set_default=True):
     :param multidict: multiple values for the same key, e.g, MultiDict([('a', 'b'), ('a', 'c')])
     """
     d = {}
-    model_prefix = model_cls.__name__.lower() + '.'
+    model_prefix = model_cls.__name__.lower() + '.'  # demouser.name
+    model_prefix_underscore = inflection.underscore(model_cls.__name__) + '.'  # demo_user.name
     for key, value in multidict.items():
         # NOTE: Blank string skipped
         if not value:
@@ -572,6 +574,8 @@ def populate_model(multidict, model_cls, set_default=True):
         # Only process the keys with leading model.
         if key.startswith(model_prefix):
             key = key[len(model_prefix):]
+        elif key.startswith(model_prefix_underscore):
+            key = key[len(model_prefix_underscore):]
         else:
             continue
         #

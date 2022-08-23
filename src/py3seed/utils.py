@@ -97,7 +97,15 @@ def parse_layout(body, models={}):
     comma_regex = re.compile(r',\s*(?![^()]*\))')
 
     def _parse_column(column_str):
-        """ Parse column string. """
+        """ Parse column string.
+
+        Column string possible values:
+        1) single column with param and span, e.g, column?is_param=true#6
+        2) contains inner columns, e,g, (column?is_param=true, column)?is_param=true#6
+        3) blank column prints only a placeholder
+        4) summary column $ prints model's summary
+        5) number column prints a group of fields, e.g, __groups__=['', ''], using 0 as column name should print groups[0]
+        """
         column_str = column_str.strip()
         ret = {}
         # Parse span at the end, i.e, a#4,(b,c)#8
@@ -107,7 +115,8 @@ def parse_layout(body, models={}):
             ret.update({'span': int(span_match.group(2))})
         # Check bracket
         bracket_match = bracke_regex.match(column_str)
-        if bracket_match:  # Inner column, e.g, a,(b,c)
+        # Inner column, e.g, a,(b,c)
+        if bracket_match:
             column_str = bracket_match.group(1)
             query_str = bracket_match.group(2)
             children = [_parse_column(cs) for cs in comma_regex.split(column_str)]
@@ -115,7 +124,8 @@ def parse_layout(body, models={}):
             # Join children's name
             # e.g, a,(b?p=1,c#6) -> b+c
             column_str = '+'.join(map(lambda x: x['name'], children))
-        else:  # Single level column, e.g, a,b,c
+        # Single level column, e.g, a,b,c
+        else:
             if '?' in column_str:
                 column_str, query_str = column_str.split('?')
             else:
@@ -141,9 +151,9 @@ def parse_layout(body, models={}):
                     ret.update({'model': found, 'sub': sub, 'action': action})
                     # Append to return seeds
                     seeds.append(ret)
-        #
+        # Names
         ret.update(generate_names(column_str))
-        #
+        # Params
         params = {}
         if query_str:
             # Parse params, i.e, a?is_card=true,(b,c)?is_tab=true

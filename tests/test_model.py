@@ -77,7 +77,7 @@ class User(MongoModel):
     siblings: List[ForwardRef('User')] = None
 
     last_login: LastLogin = None
-
+    logins: List[LastLogin] = None
     posts: List[Post] = None
 
     l: List[str] = None
@@ -104,8 +104,11 @@ class User(MongoModel):
 
 def test_model():
     """ Test cases for modal definition. """
+    #
     # Test schema
+    #
     schema = User.schema()
+    # Properties
     assert schema['type'] == 'object'
     assert schema['properties']['_id']['py_type'] == 'ObjectId'
     assert schema['properties']['point']['readonly']
@@ -116,9 +119,15 @@ def test_model():
     assert schema['properties']['posts']['items']['properties']['title']['type'] == 'string'
     assert schema['properties']['posts']['items']['properties']['comments']['items']['properties']['date'][
                'type'] == 'date'
+    assert 'ip' in schema['properties']['last_login']['properties']
+    assert 'ip' in schema['properties']['logins']['items']['properties']
+    assert 'title' in schema['properties']['posts']['items']['properties']
+    # Layout
     assert len(schema['columns']) == len(User.__columns__)
     assert len(schema['layout']) == 6
     assert schema['layout'][0][0]['name'] == 'avatar'  # row 0, column 0
+    assert schema['layout'][2][0]['name'] == 'password'  # row 2, column 0
+    assert schema['layout'][2][1]['name'] == ''  # row 2, column 1, emtry column
     assert schema['layout'][3][1]['name'] == 'status+roles'  # row 3, column 1
     assert schema['layout'][3][1]['name_snake'] == 'status_roles'
     assert schema['layout'][3][1]['span'] == 8
@@ -132,29 +141,28 @@ def test_model():
     assert schema['layout'][5][1]['children'][1]['name'] == 'posts'  # row 2, column 1, children 1
     assert schema['layout'][5][1]['children'][1]['span'] == 6
     assert schema['searchables'] == ['name__like', 'status']
-
     # Relation schema
     assert schema['properties']['team_id']['py_type'] == 'ObjectId'
     assert schema['properties']['team']['properties']['name']['type'] == 'string'
     team_schema = Team.schema()
     assert team_schema['properties']['members']['type'] == 'array'
     assert 'email' in team_schema['properties']['members']['items']['properties']
-
+    #
+    # Test access
+    #
     # Prepare an instance of User
     now = datetime.now()
     team = Team(_id=ObjectId(), name='dev')
     usr = User(team=team)
-
     # Test default values
     assert usr.point == 0
     assert usr.status == UserStatus.NORMAL
     assert usr.roles[0] == UserRole.MEMBER
     assert len(usr.l) == 0
-
-    # Test referencing modal
-    usr.last_login = LastLogin(ip='127.0.0.1', time=now)
+    # Test referencing model
+    usr.last_login.ip = '127.0.0.1'
+    usr.last_login.time = now
     assert usr.last_login.ip == '127.0.0.1'
-
     # Test self-referencing
     usr.sibling = User(name='sibling', email='sibling', team=team)
     usr.siblings = [
@@ -164,18 +172,15 @@ def test_model():
     assert type(usr.sibling) == User
     assert type(usr.siblings[0]) == User
     assert len(usr.siblings) == 2
-
     # Test copy
     another_usr = usr.copy()
     assert usr.point == another_usr.point
     assert usr != another_usr
     assert usr.last_login.ip == another_usr.last_login.ip
     assert usr.last_login != another_usr.last_login
-
     # Test json
     json_ = json.loads(usr.json())
     assert json_['create_time'] == usr.create_time.strftime(DATETIME_FORMAT)
-
     # Test dict
     admin = User(
         name='admin',
@@ -192,7 +197,9 @@ def test_model():
     })
     assert len(admin.posts) == len(editor.posts)
 
+    #
     # Test validate
+    #
     def _validate_and_check_message(message):
         errors = usr.validate()
         assert next((e for e in errors if message in e.message), None) is not None
@@ -200,7 +207,6 @@ def test_model():
     _validate_and_check_message('User.name')
     usr.name = 'test'
     usr.email = 'test'
-
     # Test deleting field
     del usr.name
     with pytest.raises(AttributeError):
@@ -208,19 +214,15 @@ def test_model():
     # Validate after deleting
     _validate_and_check_message('User.name')
     usr.name = 'test'
-
     usr.posts.append(Post())
     _validate_and_check_message('Post.title')
     pst = usr.posts[0]
     pst.title = 'test'
     pst.content = 'test'
-
     usr.status = 'DELETED'
     _validate_and_check_message('User.status')
     usr.status = UserStatus.NORMAL
-
     pst.comments.append(Comment(author='test', content='test'))
-
     # Should be valid
     # print(usr.validate())
     assert len(usr.validate()) == 0
