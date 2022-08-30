@@ -99,6 +99,13 @@ class User(MongoModel):
     -
     $#4, (last_login?is_x=true#6, posts#6)?is_y=true#8
     '''
+    __groups__ = [
+        '''
+        name, email
+        intro
+        avatar
+        ''',
+    ]
     __indexes__ = [{'fields': ['email'], 'unique': True}]
 
 
@@ -140,12 +147,16 @@ def test_model():
     assert schema['layout'][5][1]['children'][0]['params']['is_x']  # row 2, column 1, children 0
     assert schema['layout'][5][1]['children'][1]['name'] == 'posts'  # row 2, column 1, children 1
     assert schema['layout'][5][1]['children'][1]['span'] == 6
+    assert len(schema['groups'][0]) == 3
     assert schema['searchables'] == ['name__like', 'status']
     # Relation schema
-    assert schema['properties']['team_id']['py_type'] == 'ObjectId'
+    assert 'is_relation' not in schema['properties']['sibling']
+    assert schema['properties']['team']['is_relation']
     assert schema['properties']['team']['properties']['name']['type'] == 'string'
+    assert schema['properties']['team_id']['py_type'] == 'ObjectId'
     team_schema = Team.schema()
     assert team_schema['properties']['members']['type'] == 'array'
+    assert team_schema['properties']['members']['is_relation']
     assert 'email' in team_schema['properties']['members']['items']['properties']
     #
     # Test access

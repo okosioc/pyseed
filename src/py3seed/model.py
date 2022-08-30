@@ -1201,6 +1201,9 @@ class BaseModel(metaclass=ModelMeta):
                     # sortable
                     if f_t.sortable is True:
                         sortables.append(f_n)
+                    # relation
+                    if isinstance(f_t, RelationField):
+                        field_schema.update({'is_relation': True})
                     #
                     properties[f_n] = field_schema
                 #
@@ -1219,7 +1222,7 @@ class BaseModel(metaclass=ModelMeta):
                 obj['layout'] = layout
                 obj['read'] = parse_layout(type_.__read__)[0] if type_.__read__ else layout
                 obj['form'] = parse_layout(type_.__form__)[0] if type_.__form__ else layout
-                obj['groups'] = [parse_layout(g) for g in type_.__groups__]
+                obj['groups'] = [parse_layout(g)[0] for g in type_.__groups__]
                 # searchables
                 obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
                 # sortables
