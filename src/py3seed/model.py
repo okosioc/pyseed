@@ -20,7 +20,7 @@ import inflection
 from bson import ObjectId
 
 from .error import SchemaError, DataError, PathError
-from .utils import parse_layout
+from .utils import parse_layout, iterate_layout
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -693,11 +693,7 @@ class BaseModel(metaclass=ModelMeta):
     # TODO: Validate all fields in layout are defined
     # Define fields can be show in query result table or card
     __columns__ = []
-    # Define layouts to render read or form page
-    __layout__ = None
-    __read__ = None
-    __form__ = None
-    # field groups, which can be included by index in layout
+    # Define field groups, which can be included by index in layouts
     # e.g,
     # __groups__ = [
     #   '''
@@ -712,6 +708,10 @@ class BaseModel(metaclass=ModelMeta):
     #   $, (0, 1)
     # '''
     __groups__ = []
+    # Define layouts to render read or form page
+    __layout__ = None
+    __read__ = None
+    __form__ = None
 
     def __init__(self, *d: Dict[str, Any], **data: Any) -> None:
         """ Init.
@@ -1124,7 +1124,7 @@ class BaseModel(metaclass=ModelMeta):
                 check_parents = [type_.__name__] + parents
                 #
                 properties = {}
-                required, searchables, sortables = [], [], []
+                required, searchables, sortables, relations = [], [], [], []
                 for f_n, f_t in type_.__fields__.items():
                     field_schema = {}
                     origin = get_origin(f_t.type)
@@ -1204,6 +1204,7 @@ class BaseModel(metaclass=ModelMeta):
                     # relation
                     if isinstance(f_t, RelationField):
                         field_schema.update({'is_relation': True})
+                        relations.append(f_n)
                     #
                     properties[f_n] = field_schema
                 #
@@ -1223,10 +1224,16 @@ class BaseModel(metaclass=ModelMeta):
                 obj['read'] = parse_layout(type_.__read__)[0] if type_.__read__ else layout
                 obj['form'] = parse_layout(type_.__form__)[0] if type_.__form__ else layout
                 obj['groups'] = [parse_layout(g)[0] for g in type_.__groups__]
+                # each column in layout can be blank('')/summary($)/hyphen(-)/group(number)/field(string) suffixed with query and span string
+                # read_fields/form_fields just return field names
+                obj['read_fields'] = list(iterate_layout(obj['read'], obj['groups']))
+                obj['form_fields'] = list(iterate_layout(obj['form'], obj['groups']))
                 # searchables
                 obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
                 # sortables
                 obj['sortables'] = sortables
+                # relations
+                obj['relations'] = relations
                 #
                 return obj
             elif type_ is str:

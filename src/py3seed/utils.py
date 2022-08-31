@@ -54,7 +54,11 @@ def work_in(dirname=None):
 
 def generate_names(name):
     """ Generate names, which can be used directly in code generation. """
-    if name:
+    if name in ('', '-', '$') or re.match(r'[\d+]+', name):
+        return {
+            'name': name,
+        }
+    else:
         name_hyphen = re.sub(r'[.,?=#+]', '-', ''.join(name.split()))  # e.g, plan.members-form -> plan-members-form
         return {
             'name': name,  # => SampleModel
@@ -64,10 +68,7 @@ def generate_names(name):
             'name_snake': inflection.underscore(name_hyphen),  # => sample_model
             'name_snake_plural': inflection.tableize(name_hyphen),  # => sample_models
             'name_title': inflection.titleize(name_hyphen),  # => Sample Model
-        }
-    else:
-        return {
-            'name': '',
+            'name_title_lower': inflection.titleize(name_hyphen).lower(),  # => sample model
         }
 
 
@@ -100,11 +101,12 @@ def parse_layout(body, models={}):
         """ Parse column string.
 
         Column string possible values:
-        1) single column with param and span, e.g, column?is_param=true#6
-        2) contains inner columns, e,g, (column?is_param=true, column)?is_param=true#6
-        3) blank column prints only a placeholder
-        4) summary column $ prints model's summary
-        5) number column prints a group of fields, e.g, __groups__=['', ''], using 0 as column name should print groups[0]
+        1) blank column prints only a placeholder
+        2) row only contains one hyphen(-) prints <hr>
+        3) summary column($) prints model's summary
+        4) number column prints a group of fields, e.g, __groups__=['', ''], using 0 as column name should print groups[0]
+        5) single column with param and span, e.g, column?is_param=true#6
+        6) contains inner columns, e,g, (column?is_param=true, column)?is_param=true#6
         """
         column_str = column_str.strip()
         ret = {}
@@ -193,3 +195,23 @@ def parse_layout(body, models={}):
         rows.append(row)
     #
     return rows, seeds
+
+
+def iterate_layout(layout, groups=[]):
+    """ Each column in layout can be blank('')/hyphen(-)/summary($)/group(number)/field(string)/inner fields(has children), iterate the whole layout and return field names only.
+
+    :param layout: Parsed layout
+    :param groups: Group index in layout need to refer to this list
+    :return:
+    """
+    for row in layout:
+        for col in row:
+            col_name = col['name']
+            if col.get('children'):
+                yield from iterate_layout([col['children']], groups)
+            elif col_name.isdigit():
+                yield from iterate_layout(groups[int(col_name)], groups)
+            elif col_name in ('', '-', '$'):
+                pass
+            else:
+                yield col_name

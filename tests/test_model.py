@@ -57,9 +57,26 @@ class Post(BaseModel):
 class Team(MongoModel):
     """ Team definition. """
     name: str
+    phone: str = None
+    logo: str = None
+    remarks: str = None
+    managers: List[str] = None
     #
     update_time: datetime = None
     create_time: datetime = datetime.now
+    __groups__ = [
+        '''
+        logo
+        name, phone
+        remarks
+        ''',
+        '''
+        managers
+        '''
+    ]
+    __read__ = '''
+    $, (0, 1)
+    '''
 
 
 class User(MongoModel):
@@ -91,6 +108,13 @@ class User(MongoModel):
     create_time: datetime = datetime.now
 
     __columns__ = ['avatar', 'name', 'email', 'status', 'create_time']
+    __groups__ = [
+        '''
+        name, email
+        intro
+        avatar
+        ''',
+    ]
     __layout__ = '''
     avatar
     name, email
@@ -99,13 +123,6 @@ class User(MongoModel):
     -
     $#4, (last_login?is_x=true#6, posts#6)?is_y=true#8
     '''
-    __groups__ = [
-        '''
-        name, email
-        intro
-        avatar
-        ''',
-    ]
     __indexes__ = [{'fields': ['email'], 'unique': True}]
 
 
@@ -150,6 +167,7 @@ def test_model():
     assert len(schema['groups'][0]) == 3
     assert schema['searchables'] == ['name__like', 'status']
     # Relation schema
+    assert schema['relations'] == ['team']
     assert 'is_relation' not in schema['properties']['sibling']
     assert schema['properties']['team']['is_relation']
     assert schema['properties']['team']['properties']['name']['type'] == 'string'
@@ -158,6 +176,7 @@ def test_model():
     assert team_schema['properties']['members']['type'] == 'array'
     assert team_schema['properties']['members']['is_relation']
     assert 'email' in team_schema['properties']['members']['items']['properties']
+    assert team_schema['read_fields'] == ['logo', 'name', 'phone', 'remarks', 'managers']
     #
     # Test access
     #
