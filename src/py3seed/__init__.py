@@ -17,6 +17,7 @@ from .model import SimpleEnumMeta, SimpleEnum, Format, Comparator, DATETIME_FORM
 from .admin import register, registered_models
 from .utils import Pagination
 from .websupport import populate_model, populate_search
+from .cachesupport import CacheModel
 from .mongosupport import MongoModel, connect
 
 metadata = importlib_metadata.metadata("py3seed")

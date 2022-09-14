@@ -269,15 +269,15 @@ class MongoModel(BaseModel):
         return ModelCursor(cls, collection, *args, **kwargs)
 
     @classmethod
-    def search(cls, filter=None, page=1, per_page=20, max_page=-1, **kwargs):
+    def search(cls, filter_=None, page=1, per_page=20, max_page=-1, **kwargs):
         """ Search models and return records and pagination. """
-        count = cls.count(filter)
+        count = cls.count(filter_)
         if max_page > 0:
             limit = per_page * max_page
             if count > limit:
                 count = limit
         start = (page - 1) * per_page
-        records = list(cls.find(filter, skip=start, limit=per_page, **kwargs))
+        records = list(cls.find(filter_, skip=start, limit=per_page, **kwargs))
         pagination = Pagination(page, per_page, count)
         return records, pagination
 
@@ -312,45 +312,46 @@ class MongoModel(BaseModel):
             return None
 
     @classmethod
-    def count(cls, filter=None, **kwargs):
+    def count(cls, filter_=None, **kwargs):
+        """ Count reconds. """
         collection = cls.get_collection(**kwargs)
-        if filter:
-            return collection.count_documents(filter, **kwargs)
+        if filter_:
+            return collection.count_documents(filter_, **kwargs)
         else:
             return collection.estimated_document_count(**kwargs)
 
     @classmethod
-    def replace_one(cls, filter, replacement, *args, **kwargs):
+    def replace_one(cls, filter_, replacement, *args, **kwargs):
         """ Please note we do not apply validation here. """
         collection = cls.get_collection(**kwargs)
         # UpdateResult
-        return collection.replace_one(filter, replacement, *args, **kwargs)
+        return collection.replace_one(filter_, replacement, *args, **kwargs)
 
     @classmethod
-    def update_one(cls, filter, update, *args, **kwargs):
+    def update_one(cls, filter_, update, *args, **kwargs):
         """ Please note we do not apply validation here. """
         collection = cls.get_collection(**kwargs)
         # UpdateResult
-        return collection.update_one(filter, update, *args, **kwargs)
+        return collection.update_one(filter_, update, *args, **kwargs)
 
     @classmethod
-    def update_many(cls, filter, update, *args, **kwargs):
+    def update_many(cls, filter_, update, *args, **kwargs):
         """ Please note we do not apply validation here. """
         collection = cls.get_collection(**kwargs)
         # UpdateResult
-        return collection.update_many(filter, update, *args, **kwargs)
+        return collection.update_many(filter_, update, *args, **kwargs)
 
     @classmethod
-    def delete_one(cls, filter, **kwargs):
+    def delete_one(cls, filter_, **kwargs):
         collection = cls.get_collection(**kwargs)
         # DeleteResult
-        return collection.delete_one(filter)
+        return collection.delete_one(filter_)
 
     @classmethod
-    def delete_many(cls, filter, **kwargs):
+    def delete_many(cls, filter_, **kwargs):
         collection = cls.get_collection(**kwargs)
         # DeleteResult
-        return collection.delete_many(filter)
+        return collection.delete_many(filter_)
 
     @classmethod
     def aggregate(cls, pipeline, **kwargs):
@@ -362,9 +363,9 @@ class MongoModel(BaseModel):
         return collection.aggregate(pipeline, **kwargs)
 
     @classmethod
-    def distinct(cls, key, filter=None, **kwargs):
+    def distinct(cls, key, filter_=None, **kwargs):
         collection = cls.get_collection(**kwargs)
-        return collection.distinct(key, filter, **kwargs)
+        return collection.distinct(key, filter_, **kwargs)
 
     @classmethod
     def group(cls, key, condition, initial, reduce, finalize=None, **kwargs):
