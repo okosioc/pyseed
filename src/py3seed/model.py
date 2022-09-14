@@ -433,7 +433,7 @@ class ModelMeta(ABCMeta):
         #
         for base in reversed(bases):
             if issubclass(base, BaseModel):  # True if base is BaseModel or its subclass
-                # BaseModel do not have __fields__ currently
+                # BaseModel do not have __fields__
                 if base is not BaseModel:
                     fields.update(deepcopy(base.__fields__))
                 # Id field's type should be defined in BaseModel/MongoModel, so we need to fetch them from bases
@@ -753,18 +753,40 @@ class BaseModel(metaclass=ModelMeta):
             #   Remember which users are removed and appended from team
             #   Add transaction support to update these users before updating team object
             #
-            if field_type.source_field_name is not None:
-                relation_value = data.get(field_type.source_field_name, Undefined)
+            if field_type.source_field_name is not None:  # e.g, team_id is created by team relation, so source field name of team_id is team
+                source_field = cls.__fields__[field_type.source_field_name]
+                relation_value = data.get(source_field.name, Undefined)  # get team value
                 # RelationField's value is lazy loaded, undefined means it is not load, so trust the value in current field
                 if relation_value is Undefined:
                     pass
                 # If it is not Undefined, means it is already loaded and may be updated programmtically, so overwrite current field
                 else:
+                    update_value = None
                     if isinstance(relation_value, list):
-                        update_value = [getattr(v, cls.__id_name__) for v in relation_value]
+                        update_value = []
+                        for v in relation_value:
+                            if isinstance(v, dict):  # Value can be raw dict against related model
+                                id_ = v.get(cls.__id_name__)
+                            else:  # Value should be instance of relatited model
+                                id_ = getattr(v, cls.__id_name__)
+                            #
+                            if id_:
+                                if not isinstance(id_, cls.__id_type__):
+                                    id_ = cls.__id_type__(id_)
+                                #
+                                update_value.append(id_)
                     else:
-                        update_value = getattr(relation_value, cls.__id_name__)
-                    #
+                        if isinstance(relation_value, dict):
+                            id_ = relation_value.get(cls.__id_name__)
+                        else:
+                            id_ = getattr(relation_value, cls.__id_name__)
+                        #
+                        if id_:
+                            if not isinstance(id_, cls.__id_type__):
+                                id_ = cls.__id_type__(id_)
+                            #
+                            update_value = id_
+                    # update_value can be none or [], meaning clear the field
                     data[field_name] = update_value
             #
             field_value, field_errors = cls._validate_field(field_type, data.get(field_name, Undefined))
@@ -1085,6 +1107,16 @@ class BaseModel(metaclass=ModelMeta):
     def json(self, **kwargs) -> str:
         """ Convert to json str. """
         return json.dumps(self.dict(), cls=ModelJSONEncoder, **kwargs)
+
+    @classmethod
+    def find_one(cls, filter_or_id, *args, **kwargs):
+        """ abstract method, use it to fetch one related model. """
+        raise NotImplementedError()
+
+    @classmethod
+    def find(cls, *args, **kwargs):
+        """ abstract method, use it to fetch many related models. """
+        raise NotImplementedError()
 
     @classmethod
     def schema(cls):

@@ -171,6 +171,7 @@ def test_model():
     assert 'is_relation' not in schema['properties']['sibling']
     assert schema['properties']['team']['is_relation']
     assert schema['properties']['team']['properties']['name']['type'] == 'string'
+    assert schema['properties']['team']['properties']['_id']['py_type'] == 'ObjectId'
     assert schema['properties']['team_id']['py_type'] == 'ObjectId'
     team_schema = Team.schema()
     assert team_schema['properties']['members']['type'] == 'array'

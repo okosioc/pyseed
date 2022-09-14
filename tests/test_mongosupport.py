@@ -12,7 +12,7 @@
 import pytest
 from pymongo.errors import DuplicateKeyError
 
-from py3seed import DataError
+from py3seed import DataError, populate_model
 from .test_model import User, Team
 
 
@@ -56,7 +56,7 @@ def test_crud(db):
     assert len(team.members) == 1
     assert team.members[0]._id == usr._id
 
-    # Relation update
+    # relation update
     team1 = Team(name='test1')
     team1.save()
     usr.team = team1
@@ -69,11 +69,23 @@ def test_crud(db):
     assert len(team1.members) == 2
     usr2 = User(name='test2', email='test2', team=team1)
     usr2.save()
-    # Reset back relations
+    # reset back relations
     del team1.members
     assert len(team1.members) == 3
+
+    # posting
+    request = {
+        'user.name': 'test3',
+        'user.email': 'test3',
+        'user.team': {'_id': str(team1._id)}
+    }
+    usr3 = populate_model(request, User)
+    usr3.save()
+    # reset back relations
+    del team1.members
+    assert len(team1.members) == 4
 
     # D
     assert usr.delete().deleted_count == 1
     # Verify
-    assert User.count({}) == 2
+    assert User.count({}) == 3

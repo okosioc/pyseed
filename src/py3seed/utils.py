@@ -11,6 +11,7 @@
 
 import contextlib
 import json
+import math
 import os
 import re
 import shutil
@@ -215,3 +216,51 @@ def iterate_layout(layout, groups=[]):
                 pass
             else:
                 yield col_name
+
+
+class Pagination(object):
+    """ Pagination support. """
+
+    def __init__(self, page, per_page, total_count):
+        self.page = page
+        self.per_page = per_page
+        self.total_count = total_count
+
+    @property
+    def pages(self):
+        return int(math.ceil(self.total_count / float(self.per_page)))
+
+    @property
+    def has_prev(self):
+        return self.page > 1
+
+    @property
+    def prev(self):
+        return self.page - 1 if self.has_prev else None
+
+    @property
+    def has_next(self):
+        return self.page < self.pages
+
+    @property
+    def next(self):
+        return self.page + 1 if self.has_next else None
+
+    @property
+    def iter_pages(self, left_edge=2, left_current=2, right_current=3, right_edge=2):
+        last = 0
+        for num in range(1, self.pages + 1):
+            if num <= left_edge or \
+                    (num > self.page - left_current - 1 and num < self.page + right_current) or \
+                    num > self.pages - right_edge:
+                if last + 1 != num:
+                    yield None
+                yield num
+                last = num
+
+    def __iter__(self):
+        """ Can use dict(pagination) for jsonify. """
+        for key in ['page', 'pages', 'prev', 'next']:
+            yield key, getattr(self, key)
+        #
+        yield 'iter_pages', list(self.iter_pages)

@@ -15,7 +15,9 @@ from .error import SeedError, SchemaError, DataError, DatabaseError, PathError
 from .model import SimpleEnumMeta, SimpleEnum, Format, Comparator, DATETIME_FORMAT, ModelJSONEncoder, \
     ModelField, RelationField, BaseModel, relation
 from .admin import register, registered_models
-from .mongosupport import MongoModel, connect, populate_model, populate_search, Pagination
+from .utils import Pagination
+from .websupport import populate_model, populate_search
+from .mongosupport import MongoModel, connect
 
 metadata = importlib_metadata.metadata("py3seed")
 __version__ = metadata["version"]
