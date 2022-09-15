@@ -16,7 +16,6 @@ from copy import deepcopy
 from datetime import datetime
 from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, Set, Any, ForwardRef, List, Tuple
 
-import inflection
 from bson import ObjectId
 
 from .error import SchemaError, DataError, PathError
@@ -337,9 +336,9 @@ class RelationField(ModelField):
                  **kwargs):
         """ Init method.
 
-        :param save_field_name: The name to use for saving current relation
+        :param save_field_name: The name to use for saving current relation, if it is none, will use xxx_id/xxx_ids by default. THe back field in related model have same value, used for search the original model
         :param save_field_order: If the field is List, use this order when loading and saving
-        :param back_field_name: The name to use for the relation from the related object back to this one
+        :param back_field_name: The name to use for the relation from the related model back to this one, if it is none, do not create back field in related model
         :param back_field_is_list: If back field is list
         :param back_field_order: If back field is list, use this order when loading and saving
         :param is_back_field: If its a back field defined in related object
@@ -507,7 +506,7 @@ class ModelMeta(ABCMeta):
                     skips.add(ann_name)
                     continue
                 # Validate
-                _, f_origin = _validate_annotation(ann_name, ann_type)
+                f_type, f_origin = _validate_annotation(ann_name, ann_type)
                 # Create another field for RelationField
                 save_field = None
                 #
@@ -530,21 +529,21 @@ class ModelMeta(ABCMeta):
                         else:
                             field.save_field_name = ann_name + '_id'
                     # Create the save field
-                    # Please note: if it is none means it is the auto-created back relation in related object
-                    id_type = namespace.get('__id_type__')
+                    id_type = f_type.__id_type__  # related model's is a basemodel
                     save_field = ModelField(
-                        name=field.save_field_name, type_=List[id_type] if f_origin is list else id_type,
+                        name=field.save_field_name,
+                        type_=List[id_type] if f_origin is list else id_type,
                         required=field.required,
                         source_field_name=ann_name,  # Mark the source field
                     )
                     # Set required to false
                     field.required = False
-                    # back_field should always has a meaningful value
-                    # if it is none, this field's object name is used, e.g, user.team -> team.users
+                    # back_field_name should always has a meaningful value, if it is none, do not create back field in related object
+                    # e.g,
+                    # project.activities.user -> user, do not need to create back_field in user model as it is hard to search all the activities for user
+                    # in such case, we need to create activity model, activity.project -> project.activities, activity.user -> user.activities
                     if field.back_field_name is None:
-                        field.back_field_name = name.lower()
-                        if field.back_field_is_list:
-                            field.back_field_name = inflection.pluralize(field.back_field_name)
+                        pass
                 # Define a ModelField
                 elif isinstance(value, ModelField):
                     # Supplement field's name and type, as we use annotation to define a model field
@@ -651,7 +650,7 @@ class ModelMeta(ABCMeta):
         # Try to create back field of relation fields after this class is created
         #
         for f in cls.__fields__.values():
-            if isinstance(f, RelationField):
+            if isinstance(f, RelationField) and f.back_field_name:  # Do not create back field in related model if back_field_name is None
                 back_field = RelationField(
                     name=f.back_field_name, type_=List[cls] if f.back_field_is_list else cls,
                     save_field_name=f.save_field_name, save_field_order=f.back_field_order,
@@ -763,27 +762,29 @@ class BaseModel(metaclass=ModelMeta):
                 else:
                     update_value = None
                     if isinstance(relation_value, list):
+                        relation_type = get_args(source_field.type)[0]
                         update_value = []
                         for v in relation_value:
                             if isinstance(v, dict):  # Value can be raw dict against related model
-                                id_ = v.get(cls.__id_name__)
+                                id_ = v.get(relation_type.__id_name__)
                             else:  # Value should be instance of relatited model
-                                id_ = getattr(v, cls.__id_name__)
+                                id_ = getattr(v, relation_type.__id_name__)
                             #
                             if id_:
-                                if not isinstance(id_, cls.__id_type__):
-                                    id_ = cls.__id_type__(id_)
+                                if not isinstance(id_, relation_type.__id_type__):
+                                    id_ = relation_type.__id_type__(id_)
                                 #
                                 update_value.append(id_)
                     else:
+                        relation_type = source_field.type
                         if isinstance(relation_value, dict):
-                            id_ = relation_value.get(cls.__id_name__)
+                            id_ = relation_value.get(relation_type.__id_name__)
                         else:
-                            id_ = getattr(relation_value, cls.__id_name__)
+                            id_ = getattr(relation_value, relation_type.__id_name__)
                         #
                         if id_:
-                            if not isinstance(id_, cls.__id_type__):
-                                id_ = cls.__id_type__(id_)
+                            if not isinstance(id_, relation_type.__id_type__):
+                                id_ = relation_type.__id_type__(id_)
                             #
                             update_value = id_
                     # update_value can be none or [], meaning clear the field
@@ -920,22 +921,21 @@ class BaseModel(metaclass=ModelMeta):
                 if f_origin is None:
                     # This is a back field created by relation field, means id is saved in one relation object
                     if field.is_back_field:
-                        default = f_type.find_one({field.save_field_name: self.__dict__.get(f_type.__id_name__)})
+                        default = f_type.find_one({field.save_field_name: self.__dict__.get(self.__class__.__id_name__)})
                     else:
                         default = f_type.find_one({f_type.__id_name__: self.__dict__.get(field.save_field_name)})
                 elif f_origin is list:
                     l_type = get_args(f_type)[0]
-                    # This is a back field created by relation field, means this object id is saved in many relation objects
+                    # This is a back field created by relation field, means this object id is saved in many related objects
                     if field.is_back_field:
                         # Typical many-to-one definition way, i.e, using a foreign key to store related object's id
                         # In such case, may return very big amount of object so we only fetch part of it, i.e, 100 records
                         # e.g,
-                        # Relation field is defined in User using field name team, so the team id stores in a field name team_id
-                        # Below back relation field auto-created in Team
-                        #   members: List[User] -> User.find({team_id, self._id}, sort=[{team.join_time, 1}])
+                        # Relation field is defined in User using field name team, so the team id stores in a field name team_id, a back relation field with name members is auto-created in Team
+                        # user.team -> team.members, then team.members = User.find({team_id: self._id}, sort=[{team.join_time, 1}])
                         default = list(
                             l_type.find(
-                                {field.save_field_name: self.__dict__.get(l_type.__id_name__)},
+                                {field.save_field_name: self.__dict__.get(self.__class__.__id_name__)},
                                 sort=field.save_field_order,
                                 limit=100)
                         )
@@ -944,7 +944,7 @@ class BaseModel(metaclass=ModelMeta):
                         # In such case, the ids field should not be very large, so we fetch all the objects and sort them by id's position
                         # e.g,
                         # Relation field is defined in Team using field name members, so the team ids store in a field name members_ids
-                        #   members: List[User] -> User.find({_id: {$in: self.members_ids}})
+                        # team.members -> user.team, then team.members = User.find({_id: {$in: self.members_ids}})
                         ids = self.__dict__.get(field.save_field_name)
                         if ids is None:
                             default = []

@@ -9,6 +9,7 @@
     :date: 2022/9/14
 """
 from datetime import datetime
+from typing import List
 
 from py3seed import CacheModel, RelationField
 
@@ -24,7 +25,16 @@ class CUser(CacheModel):
     """ Cache user definition. """
     name: str
     email: str
-    team: CTeam = RelationField(back_field_name='members', back_field_is_list=True, back_field_order=[('team_join_time', 1)])
+    team: CTeam = RelationField(back_field_name='members', back_field_is_list=True, back_field_order=[('team_join_time', -1)])
+    team_join_time: datetime = None
+    update_time: datetime = None
+    create_time: datetime = datetime.now
+
+
+class CProject(CacheModel):
+    """ Cache project defintion. """
+    name: str
+    members: List[CUser] = RelationField(required=False, back_field_name='projects', back_field_is_list=True, back_field_order=[('create_time', -1)])
     update_time: datetime = None
     create_time: datetime = datetime.now
 
@@ -40,7 +50,7 @@ def test_crud():
     # C
     team1 = CTeam(name='team1')
     team1.save()
-    user1 = CUser(name='user1', email='user1@dev', team=team1)
+    user1 = CUser(name='user1', email='user1@dev', team=team1, team_join_time=datetime.now())
     user1.save()
     assert user1.id == 1
 
@@ -49,12 +59,40 @@ def test_crud():
     assert len(CTeam.find()) == 1
 
     # U
-    user2 = CUser(name='user3', email='user2@dev', team=team1)
+    user2 = CUser(name='user3', email='user2@dev', team=team1, team_join_time=datetime.now())
     user2.save()
     user2.name = 'user2'
     user2.save()
+    assert user2.id == 2
     assert len(team1.members) == 2
 
     # D
     assert user2.delete()
+    assert CUser.find_one(2) is None
+    assert len(CUser.find({'name': 'user2'})) == 0
     assert CUser.count() == 1
+
+    # id calculation after deletion
+    user3 = CUser({
+        'name': 'user3',
+        'email': 'user3@dev',
+        'team': {
+            'id': team1.id
+        },
+        'team_join_time': datetime.now(),
+    })
+    user3.save()
+    assert user3.id == 2
+    assert CUser.find_one(2).name == 'user3'
+
+    # relation many to one
+    del team1.members
+    assert team1.members == [user3, user1]  # sort DESCENDING
+
+    # relation many-to-many
+    project1 = CProject(name='project1', members=[user1, user2])
+    project1.save()
+    assert project1.members_ids == [user1.id, user2.id]
+    project2 = CProject(name='project2', members=[user2])
+    project2.save()
+    assert len(user2.projects) == 2

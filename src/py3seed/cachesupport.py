@@ -46,11 +46,16 @@ class CacheModel(BaseModel):
         match = True
         for field, condition in filter_.items():
             value = getattr(record, field)
-            if isinstance(condition, dict):  # e.g, {$in:[]}
-                pass
+            if isinstance(condition, dict):
+                if '$in' in condition:
+                    match = value in condition['$in']  # e.g, team.members -> user.team, then team.members = User.find({id: {$in: self.members_ids}})
+                else:
+                    raise NotImplementedError(f'UNSUPPORTED condition: {condition}')
             else:
-                if value != condition:
-                    match = False
+                if isinstance(value, list):
+                    match = condition in value  # e.g, user.team -> team.members, then team.members = User.find({team_id: self.id})
+                else:
+                    match = value == condition  # e.g, user.team -> team.members, then user.team = Team.find({id: self.team_id})
         #
         return match
 
@@ -62,7 +67,15 @@ class CacheModel(BaseModel):
         """
         collection = cls.get_collection(**kwargs)
         records = [record for record in collection if cls.match_record(record, filter_)]
-        #
+        # sort, [(field, order)], order ASCENDING = 1, order DESCENDING = -1
+        if 'sort' in kwargs:
+            sort = kwargs['sort']
+            if len(sort) > 1:
+                raise NotImplementedError(f'UNSUPPORTED sort: {sort}')
+            #
+            sort = sort[0]
+            records.sort(key=lambda x: getattr(x, sort[0]), reverse=(True if sort[1] == -1 else False))
+        # pagination
         if 'skip' in kwargs:
             records = records[kwargs['skip']:kwargs['skip'] + kwargs['limit']]
         #
