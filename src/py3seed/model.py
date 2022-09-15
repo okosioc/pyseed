@@ -1266,7 +1266,8 @@ class BaseModel(metaclass=ModelMeta):
                 obj['sortables'] = sortables
                 # relations
                 obj['relations'] = relations
-                #
+                # id_name
+                obj['id_name'] = type_.__id_name__
                 return obj
             elif type_ is str:
                 return {'type': 'string', 'format': Format.TEXT, 'py_type': 'str'}

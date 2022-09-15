@@ -134,6 +134,7 @@ def test_model():
     schema = User.schema()
     # Properties
     assert schema['type'] == 'object'
+    assert schema['id_name'] == '_id'
     assert schema['properties']['_id']['py_type'] == 'ObjectId'
     assert schema['properties']['point']['readonly']
     assert schema['properties']['status']['enum'] == list(UserStatus)
