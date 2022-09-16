@@ -435,7 +435,7 @@ class ModelMeta(ABCMeta):
                 # BaseModel do not have __fields__
                 if base is not BaseModel:
                     fields.update(deepcopy(base.__fields__))
-                # Id field's type should be defined in BaseModel/MongoModel, so we need to fetch them from bases
+                # Id field's type should be defined in MongoModel/CacheModel, so we need to fetch them from bases
                 if '__id_type__' not in namespace:
                     namespace['__id_type__'] = base.__id_type__
                     namespace['__id_name__'] = base.__id_name__
@@ -530,6 +530,9 @@ class ModelMeta(ABCMeta):
                             field.save_field_name = ann_name + '_id'
                     # Create the save field
                     id_type = f_type.__id_type__  # related model's is a basemodel
+                    if id_type is None:
+                        raise SchemaError(f'{field.save_field_name}: id type can not be blank')
+                    #
                     save_field = ModelField(
                         name=field.save_field_name,
                         type_=List[id_type] if f_origin is list else id_type,
@@ -604,7 +607,10 @@ class ModelMeta(ABCMeta):
             elif isinstance(check_type, SimpleEnumMeta):
                 pass
             elif issubclass(check_type, BaseModel):
-                #
+                # do not iterate check_type.__fields__ but iterate __annotations__ instead
+                # e.g,
+                # if use check_type.__fields__, when checking project.members, will fall into user.team and team.members recursion
+                # because the import mechanism, it is not possible to make explicit reference between user and team, so using annotations can prevent the recursion
                 for a_n, a_t in check_type.__dict__.get('__annotations__', {}).items():
                     _iter(a_n, a_t, level + (1 if is_in_list else 0))
 
@@ -683,8 +689,8 @@ class BaseModel(metaclass=ModelMeta):
     # Fields may be overwrited
     #
     # The id field name
-    __id_name__ = '_id'
-    __id_type__ = ObjectId
+    __id_name__ = None
+    __id_type__ = None
     #
     __icon__ = None
     __title__ = None
@@ -1236,6 +1242,7 @@ class BaseModel(metaclass=ModelMeta):
                     # relation
                     if isinstance(f_t, RelationField):
                         field_schema.update({'is_relation': True})
+                        field_schema.update({'is_back_relation': f_t.is_back_field})
                         relations.append(f_n)
                     #
                     properties[f_n] = field_schema

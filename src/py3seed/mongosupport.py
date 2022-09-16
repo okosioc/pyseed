@@ -164,6 +164,10 @@ class MongoModel(BaseModel):
     # if None DEFAULT_CONNECTION_NAME
     __db_alias__ = None
 
+    # id field definition
+    __id_name__ = '_id'
+    __id_type__ = ObjectId
+
     # Mongo ID field
     _id: ObjectId = None
 
