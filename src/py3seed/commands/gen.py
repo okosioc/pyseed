@@ -235,6 +235,8 @@ def _recursive_render(t_base, o_base, name, context, env):
       {{view}}
       {{#seeds}}
       {{seed}}
+      {{#models}}
+      {{model}}
     """
     t_path = os.path.join(t_base, name)
     logger.debug(f'template {t_path}')
@@ -255,12 +257,18 @@ def _recursive_render(t_base, o_base, name, context, env):
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'views':
             out_key = '__view'
-            out_values = context['__blueprint']['views']  # Views under current blueprint
+            out_values = context['__blueprint']['views']  # views under current blueprint
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'seeds':
             out_key = '__seed'
-            out_values = context['seeds']  # Seeds can be accessed at context level
+            out_values = context['seeds']  # seeds can be accessed at context level
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
+        elif key == 'models':
+            out_key = '__model'
+            # models can be accessed at context level, NOTE: models is dict, {name: {names, schema}}}, so we use values() here
+            out_values = list(context['models'].values())
+            # names of blueprints/views/seeds are kebab formats because them will be used in the url directly, while modal names are always in camel case because of PEP8
+            out_names = [t_name.replace(syntax, v['name_kebab']) for v in out_values]
         else:
             raise TemplateError(f'Unsupported list syntax: {syntax}')
     else:
@@ -276,6 +284,10 @@ def _recursive_render(t_base, o_base, name, context, env):
                 out_key == f'__{key}'
                 out_values = [context[f'__{key}']]
                 out_names = [t_name.replace(syntax, v['name']) for v in out_values]
+            elif key in ['model']:
+                out_key == f'__{key}'
+                out_values = [context[f'__{key}']]
+                out_names = [t_name.replace(syntax, v['name_kebab']) for v in out_values]
             else:
                 out_names = [t_name]
         else:

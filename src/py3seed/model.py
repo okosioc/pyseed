@@ -934,6 +934,7 @@ class BaseModel(metaclass=ModelMeta):
                     l_type = get_args(f_type)[0]
                     # This is a back field created by relation field, means this object id is saved in many related objects
                     if field.is_back_field:
+                        # TODO: support paging, e.g, team.members__2 to fetch page 2's records and defined a back_field_page_size to config paging size
                         # Typical many-to-one definition way, i.e, using a foreign key to store related object's id
                         # In such case, may return very big amount of object so we only fetch part of it, i.e, 100 records
                         # e.g,
@@ -1134,13 +1135,13 @@ class BaseModel(metaclass=ModelMeta):
         https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#schemaObject
         https://swagger.io/docs/specification/data-models/
 
-        However, we still have some grammars
+        However, we still have some grammars, e.g,
           - add type date
           - add enum_titles, py_type, layout, form, read, icon, readonly to help code generation
-          - Add format to array, so that we can gen a component for the whole array
-          - Add searchables to object, so that it can be used to generate search form
-          - Add sortables to object, so that it can be used to generate order drowpdown
-          - Add columns to object, so that it can be used to generate columns for table
+          - add format to array, so that we can gen a component for the whole array
+          - add searchables to object, so that it can be used to generate search form
+          - add sortables to object, so that it can be used to generate order drowpdown
+          - add columns to object, so that it can be used to generate columns for table
         """
 
         def _gen_schema(type_: Type, parents=[]):
@@ -1162,27 +1163,27 @@ class BaseModel(metaclass=ModelMeta):
                 check_parents = [type_.__name__] + parents
                 #
                 properties = {}
-                required, searchables, sortables, relations = [], [], [], []
+                required, searchables, sortables, relations = [], [], [], set()
                 for f_n, f_t in type_.__fields__.items():
                     field_schema = {}
-                    origin = get_origin(f_t.type)
+                    f_origin = get_origin(f_t.type)
                     # Dict
-                    if origin is dict:
+                    if f_origin is dict:
+                        f_type = get_args(f_t.type)[1]
                         # TODO: SUPPORT DICT
-                        pass
                     # List
-                    elif origin is list:
-                        l_type = get_args(f_t.type)[0]
-                        if l_type.__name__ in check_parents:
+                    elif f_origin is list:
+                        f_type = get_args(f_t.type)[0]
+                        if f_type.__name__ in check_parents:
                             field_schema.update({
                                 'type': 'array',
                                 # https://json-schema.org/understanding-json-schema/structuring.html#recursion
                                 # Your program should replace the {$ref:} with reference object's schema
-                                'items': {'$ref': f'#{l_type.__name__}'},
-                                'py_type': f'List[{type_.__name__}]',
+                                'items': {'$ref': f'#{f_type.__name__}'},
+                                'py_type': f'List[{f_type.__name__}]',
                             })
                         else:
-                            inner_type = _gen_schema(l_type, check_parents)
+                            inner_type = _gen_schema(f_type, check_parents)
                             field_schema.update({
                                 'type': 'array',
                                 'items': inner_type,
@@ -1190,17 +1191,20 @@ class BaseModel(metaclass=ModelMeta):
                             })
                     # built-in type, SimpleEnum or sub model
                     else:
-                        if f_t.type.__name__ in check_parents:
+                        f_type = f_t.type
+                        if f_type.__name__ in check_parents:
                             field_schema.update({
                                 'type': 'object',
                                 # Your program should replace the {$ref:} with properties of reference object's schema only
                                 # But should NOT overwrite the icon/title/description/... as these fields may use different values
-                                '$ref': f'#{f_t.type.__name__}',
-                                'py_type': f_t.type.__name__,
+                                '$ref': f'#{f_type.__name__}',
+                                'py_type': f_type.__name__,
                             })
                         else:
-                            inner_type = _gen_schema(f_t.type, check_parents)
+                            inner_type = _gen_schema(f_type, check_parents)
                             field_schema.update(inner_type)
+                            if 'relations' in inner_type:  # only sub model has relations
+                                relations.update(inner_type['relations'])
                     # default
                     if f_t.default:
                         # Skip if default is callable, e.g, datetime.now
@@ -1243,7 +1247,9 @@ class BaseModel(metaclass=ModelMeta):
                     if isinstance(f_t, RelationField):
                         field_schema.update({'is_relation': True})
                         field_schema.update({'is_back_relation': f_t.is_back_field})
-                        relations.append(f_n)
+                        # relations contains all the related model names, do not include any back relations
+                        if not f_t.is_back_field:
+                            relations.add(f_type.__name__)
                     #
                     properties[f_n] = field_schema
                 #
@@ -1263,8 +1269,8 @@ class BaseModel(metaclass=ModelMeta):
                 obj['read'] = parse_layout(type_.__read__)[0] if type_.__read__ else layout
                 obj['form'] = parse_layout(type_.__form__)[0] if type_.__form__ else layout
                 obj['groups'] = [parse_layout(g)[0] for g in type_.__groups__]
-                # each column in layout can be blank('')/summary($)/hyphen(-)/group(number)/field(string) suffixed with query and span string
-                # read_fields/form_fields just return field names
+                # each column in layout can be blank('')/hyphen(-)/summary($)/group(number)/field(string)/inner fields(has children) suffixed with query and span string
+                # read_fields/form_fields just return valid field names
                 obj['read_fields'] = list(iterate_layout(obj['read'], obj['groups']))
                 obj['form_fields'] = list(iterate_layout(obj['form'], obj['groups']))
                 # searchables
@@ -1272,7 +1278,7 @@ class BaseModel(metaclass=ModelMeta):
                 # sortables
                 obj['sortables'] = sortables
                 # relations
-                obj['relations'] = relations
+                obj['relations'] = list(relations)
                 # id_name
                 obj['id_name'] = type_.__id_name__
                 return obj

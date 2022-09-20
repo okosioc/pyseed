@@ -168,7 +168,7 @@ def test_model():
     assert len(schema['groups'][0]) == 3
     assert schema['searchables'] == ['name__like', 'status']
     # Relation schema
-    assert schema['relations'] == ['team']
+    assert schema['relations'] == ['Team']
     assert 'is_relation' not in schema['properties']['sibling']
     assert schema['properties']['team']['is_relation']
     assert schema['properties']['team']['properties']['name']['type'] == 'string'
