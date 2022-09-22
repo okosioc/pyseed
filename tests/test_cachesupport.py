@@ -42,6 +42,10 @@ class CProject(CacheModel):
 
 def test_crud():
     """ Test cases for crud. """
+    # Schema
+    cproject_schema = CProject.schema()
+    assert cproject_schema['form_relations'] == ['CTeam', 'CUser']
+
     # Init
     assert CUser.delete_many()
     assert CUser.count() == 0

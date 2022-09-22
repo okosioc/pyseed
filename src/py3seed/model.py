@@ -1162,8 +1162,10 @@ class BaseModel(metaclass=ModelMeta):
                 #   User.team:Team -> Team.members:List[User] == List[#User]
                 check_parents = [type_.__name__] + parents
                 #
-                properties = {}
-                required, searchables, sortables, relations = [], [], [], set()
+                properties = {}  # {field_name:field_schema}
+                required, searchables, sortables = [], [], []
+                current_relations, current_form_relations = {}, {}  # {model_name:field_name}, use dict to keep the order
+                inner_relations, inner_form_relations = {}, {}  # {model_name:None}, ditto
                 for f_n, f_t in type_.__fields__.items():
                     field_schema = {}
                     f_origin = get_origin(f_t.type)
@@ -1189,6 +1191,10 @@ class BaseModel(metaclass=ModelMeta):
                                 'items': inner_type,
                                 'py_type': f'List[{inner_type["py_type"]}]',
                             })
+                            #
+                            if 'relations' in inner_type:
+                                inner_relations.update({k: None for k in inner_type['relations']})
+                                inner_form_relations.update({k: None for k in inner_type['form_relations']})
                     # built-in type, SimpleEnum or sub model
                     else:
                         f_type = f_t.type
@@ -1203,8 +1209,10 @@ class BaseModel(metaclass=ModelMeta):
                         else:
                             inner_type = _gen_schema(f_type, check_parents)
                             field_schema.update(inner_type)
-                            if 'relations' in inner_type:  # only sub model has relations
-                                relations.update(inner_type['relations'])
+                            #
+                            if 'relations' in inner_type:
+                                inner_relations.update({k: None for k in inner_type['relations']})
+                                inner_form_relations.update({k: None for k in inner_type['form_relations']})
                     # default
                     if f_t.default:
                         # Skip if default is callable, e.g, datetime.now
@@ -1249,7 +1257,7 @@ class BaseModel(metaclass=ModelMeta):
                         field_schema.update({'is_back_relation': f_t.is_back_field})
                         # relations contains all the related model names, do not include any back relations
                         if not f_t.is_back_field:
-                            relations.add(f_type.__name__)
+                            current_relations[f_type.__name__] = f_n
                     #
                     properties[f_n] = field_schema
                 #
@@ -1273,12 +1281,15 @@ class BaseModel(metaclass=ModelMeta):
                 # read_fields/form_fields just return valid field names
                 obj['read_fields'] = list(iterate_layout(obj['read'], obj['groups']))
                 obj['form_fields'] = list(iterate_layout(obj['form'], obj['groups']))
-                # searchables
+                # searchables, [field__comparator]
                 obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
                 # sortables
                 obj['sortables'] = sortables
                 # relations
-                obj['relations'] = list(relations)
+                inner_relations.update(current_relations)
+                obj['relations'] = list(inner_relations.keys())
+                inner_form_relations.update({k: v for k, v in current_relations.items() if v in obj['form_fields']})
+                obj['form_relations'] = list(inner_form_relations.keys())
                 # id_name
                 obj['id_name'] = type_.__id_name__
                 return obj
