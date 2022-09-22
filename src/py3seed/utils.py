@@ -61,11 +61,12 @@ def generate_names(name):
         }
     else:
         name_hyphen = re.sub(r'[.,?=#+]', '-', ''.join(name.split()))  # e.g, plan.members-form -> plan-members-form
+        name_kebab = inflection.dasherize(inflection.underscore(name_hyphen))
         return {
             'name': name,  # => SampleModel
             'name_lower': name.lower(),  # => samplemodel
-            'name_kebab': inflection.dasherize(inflection.underscore(name_hyphen)),  # => sample-model
-            'name_camel': inflection.camelize(name_hyphen, uppercase_first_letter=False),  # => sampleModel
+            'name_kebab': name_kebab,  # => sample-model
+            'name_kebab_plural': inflection.pluralize(name_kebab),  # => sample-models
             'name_snake': inflection.underscore(name_hyphen),  # => sample_model
             'name_snake_plural': inflection.tableize(name_hyphen),  # => sample_models
             'name_title': inflection.titleize(name_hyphen),  # => Sample Model

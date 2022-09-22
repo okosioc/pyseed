@@ -8,6 +8,7 @@
     :copyright: (c) 2021 by weiminfeng.
     :date: 2022/9/14
 """
+import re
 from datetime import datetime
 from typing import List
 
@@ -57,6 +58,9 @@ def test_crud():
     # R
     assert CUser.find_one({'name': 'user1'}).email == user1.email
     assert len(CTeam.find()) == 1
+
+    # Q
+    assert len(CUser.find({'name': {'$regex': re.compile('^u')}})) == 1
 
     # U
     user2 = CUser(name='user3', email='user2@dev', team=team1, team_join_time=datetime.now())

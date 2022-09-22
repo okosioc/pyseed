@@ -203,13 +203,8 @@ def _gen(s: str):
                 seed_model = seed['model']
                 models_by_name[seed_model['name']] = seed_model
                 # Add relation models
-                # TODO: Replace old __relations__, so that we do not need to check very detail schema here
                 for relation in seed_model['schema']['relations']:
-                    relation_schema = seed_model['schema']['properties'][relation]
-                    relation_model = relation_schema['items'] if relation_schema['type'] == 'array' else relation_schema
-                    #
-                    relation_model_name = relation_model['py_type']
-                    models_by_name[relation_model_name] = models[relation_model_name]
+                    models_by_name[relation] = models[relation]
             #
             blueprint['views'].append(view)
             blueprint['models'] = models_by_name.values()
