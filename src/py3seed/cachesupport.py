@@ -50,7 +50,10 @@ class CacheModel(BaseModel):
                 if '$in' in condition:
                     match = value in condition['$in']  # e.g, team.members -> user.team, then team.members = User.find({id: {$in: self.members_ids}})
                 elif '$regex' in condition:
-                    match = condition['$regex'].match(value)  # e.g, Team.find({name: {$regex: re.compile('^海')}})
+                    if isinstance(value, str):
+                        match = condition['$regex'].match(value)  # e.g, Team.find({phone: {$regex: re.compile('^138')}})
+                    else:
+                        match = False
                 else:
                     raise NotImplementedError(f'UNSUPPORTED condition: {condition}')
             else:

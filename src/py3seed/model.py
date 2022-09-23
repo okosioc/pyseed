@@ -249,7 +249,7 @@ class ModelField:
         'type',
         'default',
         'required',
-        'readonly',
+        'editable',
         'searchable',
         'sortable',
         'format',
@@ -262,7 +262,7 @@ class ModelField:
 
     def __init__(self,
                  name: str = None, type_: Type = None,
-                 default: Any = Undefined, required: bool = Undefined, readonly: bool = Undefined,
+                 default: Any = Undefined, required: bool = Undefined, editable: bool = Undefined,
                  searchable: Comparator = Undefined, sortable: bool = Undefined,
                  format_: Format = None, icon: str = None, title: str = None, description: str = None, unit: str = None,
                  source_field_name: str = None):
@@ -282,11 +282,11 @@ class ModelField:
             self.required = True
         else:
             self.required = required
-        # readonly is false if undefined
-        if readonly is Undefined:
-            self.readonly = False
+        # editable is true if undefined
+        if editable is Undefined:
+            self.editable = True
         else:
-            self.readonly = readonly
+            self.editable = editable
         # searchable is none if undefined
         if searchable is Undefined:
             self.searchable = None
@@ -660,7 +660,7 @@ class ModelMeta(ABCMeta):
                 back_field = RelationField(
                     name=f.back_field_name, type_=List[cls] if f.back_field_is_list else cls,
                     save_field_name=f.save_field_name, save_field_order=f.back_field_order,
-                    required=False, readonly=True,  # Relation field is lazy loaded, so it is not required
+                    required=False, editable=False,  # Relation field is lazy loaded, so it is not required
                     format_=f.back_field_format, icon=f.back_field_icon, title=f.back_field_title, description=f.back_field_description,
                     unit=f.back_field_unit,
                     is_back_field=True,  # Mark this field to be a back field created by a relation field
@@ -1137,7 +1137,7 @@ class BaseModel(metaclass=ModelMeta):
 
         However, we still have some grammars, e.g,
           - add type date
-          - add enum_titles, py_type, layout, form, read, icon, readonly to help code generation
+          - add enum_titles, py_type, layout, form, read, icon, editable to help code generation
           - add format to array, so that we can gen a component for the whole array
           - add searchables to object, so that it can be used to generate search form
           - add sortables to object, so that it can be used to generate order drowpdown
@@ -1164,11 +1164,12 @@ class BaseModel(metaclass=ModelMeta):
                 #
                 properties = {}  # {field_name:field_schema}
                 required, searchables, sortables = [], [], []
-                current_relations, current_form_relations = {}, {}  # {model_name:field_name}, use dict to keep the order
+                current_relations, current_form_relations = {}, {}  # {model_name:[field_name]}, use dict to keep the order
                 inner_relations, inner_form_relations = {}, {}  # {model_name:None}, ditto
                 for f_n, f_t in type_.__fields__.items():
                     field_schema = {}
                     f_origin = get_origin(f_t.type)
+                    inner_type = None
                     # Dict
                     if f_origin is dict:
                         f_type = get_args(f_t.type)[1]
@@ -1191,10 +1192,6 @@ class BaseModel(metaclass=ModelMeta):
                                 'items': inner_type,
                                 'py_type': f'List[{inner_type["py_type"]}]',
                             })
-                            #
-                            if 'relations' in inner_type:
-                                inner_relations.update({k: None for k in inner_type['relations']})
-                                inner_form_relations.update({k: None for k in inner_type['form_relations']})
                     # built-in type, SimpleEnum or sub model
                     else:
                         f_type = f_t.type
@@ -1209,10 +1206,6 @@ class BaseModel(metaclass=ModelMeta):
                         else:
                             inner_type = _gen_schema(f_type, check_parents)
                             field_schema.update(inner_type)
-                            #
-                            if 'relations' in inner_type:
-                                inner_relations.update({k: None for k in inner_type['relations']})
-                                inner_form_relations.update({k: None for k in inner_type['form_relations']})
                     # default
                     if f_t.default:
                         # Skip if default is callable, e.g, datetime.now
@@ -1242,9 +1235,8 @@ class BaseModel(metaclass=ModelMeta):
                     if f_t.required:
                         field_schema.update({'required': True})
                         required.append(f_n)
-                    # readonly
-                    if f_t.readonly:
-                        field_schema.update({'readonly': True})
+                    # editable
+                    field_schema.update({'editable': f_t.editable})
                     # searchable
                     if f_t.searchable is not None:
                         searchables.append((f_n, f_t.searchable))
@@ -1257,7 +1249,12 @@ class BaseModel(metaclass=ModelMeta):
                         field_schema.update({'is_back_relation': f_t.is_back_field})
                         # relations contains all the related model names, do not include any back relations
                         if not f_t.is_back_field:
-                            current_relations[f_type.__name__] = f_n
+                            current_relations.setdefault(f_type.__name__, [])
+                            current_relations[f_type.__name__] += [f_n]
+                            if inner_type and 'relations' in inner_type:
+                                inner_relations.update({k: None for k in inner_type['relations']})
+                                inner_form_relations.update({k: None for k in inner_type['form_relations']})
+
                     #
                     properties[f_n] = field_schema
                 #
@@ -1287,9 +1284,9 @@ class BaseModel(metaclass=ModelMeta):
                 obj['sortables'] = sortables
                 # relations
                 inner_relations.update(current_relations)
-                obj['relations'] = list(inner_relations.keys())
-                inner_form_relations.update({k: v for k, v in current_relations.items() if v in obj['form_fields']})
-                obj['form_relations'] = list(inner_form_relations.keys())
+                obj['relations'] = [k for k in inner_relations.keys() if k != type_.__name__]  # skip self because inner_relations may contains it
+                inner_form_relations.update({k: None for k, v in current_relations.items() if any((True for vv in v if vv in obj['form_fields']))})
+                obj['form_relations'] = [k for k in inner_form_relations.keys() if k != type_.__name__]
                 # id_name
                 obj['id_name'] = type_.__id_name__
                 return obj

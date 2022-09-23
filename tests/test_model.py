@@ -86,7 +86,7 @@ class User(MongoModel):
     password: str = None
     intro: str = None
     avatar: str = None
-    point: int = ModelField(readonly=True, default=0)
+    point: int = ModelField(editable=False, default=0)
     status: UserStatus = ModelField(default=UserStatus.NORMAL, searchable=Comparator.EQ)
     roles: List[UserRole] = [UserRole.MEMBER]
 
@@ -136,7 +136,8 @@ def test_model():
     assert schema['type'] == 'object'
     assert schema['id_name'] == '_id'
     assert schema['properties']['_id']['py_type'] == 'ObjectId'
-    assert schema['properties']['point']['readonly']
+    assert schema['properties']['name']['editable']
+    assert not schema['properties']['point']['editable']
     assert schema['properties']['status']['enum'] == list(UserStatus)
     assert schema['properties']['sibling']['$ref'] == '#User'
     assert schema['properties']['siblings']['type'] == 'array'

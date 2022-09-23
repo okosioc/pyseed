@@ -26,6 +26,7 @@ class CUser(CacheModel):
     """ Cache user definition. """
     name: str
     email: str
+    phone: str = None
     team: CTeam = RelationField(back_field_name='members', back_field_is_list=True, back_field_order=[('team_join_time', -1)])
     team_join_time: datetime = None
     update_time: datetime = None
@@ -43,6 +44,9 @@ class CProject(CacheModel):
 def test_crud():
     """ Test cases for crud. """
     # Schema
+    cuser_schema = CUser.schema()
+    assert cuser_schema['relations'] == ['CTeam']
+    assert cuser_schema['form_relations'] == ['CTeam']
     cproject_schema = CProject.schema()
     assert cproject_schema['form_relations'] == ['CTeam', 'CUser']
 
@@ -55,7 +59,7 @@ def test_crud():
     # C
     team1 = CTeam(name='team1')
     team1.save()
-    user1 = CUser(name='user1', email='user1@dev', team=team1, team_join_time=datetime.now())
+    user1 = CUser(name='user1', email='user1@dev', phone='13800138000', team=team1, team_join_time=datetime.now())
     user1.save()
     assert user1.id == 1
 
@@ -65,6 +69,7 @@ def test_crud():
 
     # Q
     assert len(CUser.find({'name': {'$regex': re.compile('^u')}})) == 1
+    assert len(CUser.find({'phone': {'$regex': re.compile('^138')}})) == 1
 
     # U
     user2 = CUser(name='user3', email='user2@dev', team=team1, team_join_time=datetime.now())
