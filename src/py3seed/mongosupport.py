@@ -288,6 +288,10 @@ class MongoModel(BaseModel):
     @classmethod
     def find_by_ids(cls, ids, *args, **kwargs):
         """ Find many models by multi ObjectIds. """
+        #
+        if not ids:
+            return []
+        #
         filter_ = {}
         if 'filter' in kwargs:
             filter_.update(kwargs.pop('filter'))

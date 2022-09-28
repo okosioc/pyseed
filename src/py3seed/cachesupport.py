@@ -108,6 +108,26 @@ class CacheModel(BaseModel):
             return next((record for record in collection if record.id == filter_or_id), None)
 
     @classmethod
+    def find_by_ids(cls, ids, *args, **kwargs):
+        """ Find many models by multi ObjectIds. """
+        #
+        if not ids:
+            return []
+        #
+        filter_ = {}
+        if 'filter' in kwargs:
+            filter_.update(kwargs.pop('filter'))
+        elif len(args) > 0:
+            filter_.update(args.pop(0))  # The first args should be filter format, i.e, {}
+        #
+        filter_.update({'id': {'$in': ids}})
+        #
+        records = list(cls.find(filter_, *args, **kwargs))
+        records.sort(key=lambda i: ids.index(i.id))
+        #
+        return records
+
+    @classmethod
     def search(cls, filter_=None, page=1, per_page=20, max_page=-1, **kwargs):
         """ Search models and return records and pagination. """
         count = cls.count(filter_)

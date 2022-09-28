@@ -336,7 +336,7 @@ class RelationField(ModelField):
                  **kwargs):
         """ Init method.
 
-        :param save_field_name: The name to use for saving current relation, if it is none, will use xxx_id/xxx_ids by default. THe back field in related model have same value, used for search the original model
+        :param save_field_name: The name to use for saving current relation, if it is none, will use xxx_id/xxx_ids by default. The back field in related model have same value, used for search the original model
         :param save_field_order: If the field is List, use this order when loading and saving
         :param back_field_name: The name to use for the relation from the related model back to this one, if it is none, do not create back field in related model
         :param back_field_is_list: If back field is list
@@ -537,10 +537,9 @@ class ModelMeta(ABCMeta):
                         name=field.save_field_name,
                         type_=List[id_type] if f_origin is list else id_type,
                         required=field.required,
+                        editable=False,  # save field value will be updated by its source field, so no need to render in form
                         source_field_name=ann_name,  # Mark the source field
                     )
-                    # Set required to false
-                    field.required = False
                     # back_field_name should always has a meaningful value, if it is none, do not create back field in related object
                     # e.g,
                     # project.activities.user -> user, do not need to create back_field in user model as it is hard to search all the activities for user
@@ -660,7 +659,8 @@ class ModelMeta(ABCMeta):
                 back_field = RelationField(
                     name=f.back_field_name, type_=List[cls] if f.back_field_is_list else cls,
                     save_field_name=f.save_field_name, save_field_order=f.back_field_order,
-                    required=False, editable=False,  # Relation field is lazy loaded, so it is not required
+                    required=False,  # back field is used for display only, so it is not required
+                    editable=False,  # ditto
                     format_=f.back_field_format, icon=f.back_field_icon, title=f.back_field_title, description=f.back_field_description,
                     unit=f.back_field_unit,
                     is_back_field=True,  # Mark this field to be a back field created by a relation field
@@ -1249,6 +1249,9 @@ class BaseModel(metaclass=ModelMeta):
                         field_schema.update({'is_back_relation': f_t.is_back_field})
                         # relations contains all the related model names, do not include any back relations
                         if not f_t.is_back_field:
+                            #
+                            field_schema.update({'save_field_name': f_t.save_field_name})
+                            #
                             current_relations.setdefault(f_type.__name__, [])
                             current_relations[f_type.__name__] += [f_n]
                             if inner_type and 'relations' in inner_type:
@@ -1262,6 +1265,7 @@ class BaseModel(metaclass=ModelMeta):
                     'type': 'object',
                     'properties': properties,
                     'required': required,
+                    'editable': True,
                     'columns': type_.__columns__ if type_.__columns__ else required,  # Using required fields as columns as the default
                     'py_type': type_.__name__,
                     'icon': type_.__icon__ if type_.__icon__ else None,
@@ -1280,15 +1284,16 @@ class BaseModel(metaclass=ModelMeta):
                 obj['form_fields'] = list(iterate_layout(obj['form'], obj['groups']))
                 # searchables, [field__comparator]
                 obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
-                # sortables
+                # sortables, [(field_name, 1/-1)]
                 obj['sortables'] = sortables
                 # relations
                 inner_relations.update(current_relations)
                 obj['relations'] = [k for k in inner_relations.keys() if k != type_.__name__]  # skip self because inner_relations may contains it
                 inner_form_relations.update({k: None for k, v in current_relations.items() if any((True for vv in v if vv in obj['form_fields']))})
                 obj['form_relations'] = [k for k in inner_form_relations.keys() if k != type_.__name__]
-                # id_name
+                # id_name & id_type, used for relation inputs
                 obj['id_name'] = type_.__id_name__
+                obj['id_type'] = type_.__id_type__.__name__ if type_.__id_type__ else None
                 return obj
             elif type_ is str:
                 return {'type': 'string', 'format': Format.TEXT, 'py_type': 'str'}

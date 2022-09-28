@@ -47,6 +47,8 @@ def test_crud():
     cuser_schema = CUser.schema()
     assert cuser_schema['relations'] == ['CTeam']
     assert cuser_schema['form_relations'] == ['CTeam']
+    assert cuser_schema['id_name'] == 'id'
+    assert cuser_schema['id_type'] == 'int'
     cproject_schema = CProject.schema()
     assert cproject_schema['form_relations'] == ['CTeam', 'CUser']
 
@@ -78,6 +80,9 @@ def test_crud():
     user2.save()
     assert user2.id == 2
     assert len(team1.members) == 2
+
+    # Q
+    assert CUser.find_by_ids([1, 2])[1].name == user2.name
 
     # D
     assert user2.delete()
