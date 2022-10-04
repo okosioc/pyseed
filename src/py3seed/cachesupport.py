@@ -14,7 +14,8 @@ from . import DataError
 from .model import BaseModel
 from .utils import Pagination
 
-# {model_name:[model]}
+# {model_name:[dict]}
+# Note: Do no store model object directly, as it may cause concurrent accessing issue
 CACHES = {}
 
 
@@ -45,7 +46,7 @@ class CacheModel(BaseModel):
         #
         match = True
         for field, condition in filter_.items():
-            value = getattr(record, field)
+            value = record.get(field)
             if isinstance(condition, dict):
                 if '$in' in condition:
                     match = value in condition['$in']  # e.g, team.members -> user.team, then team.members = User.find({id: {$in: self.members_ids}})
@@ -78,13 +79,13 @@ class CacheModel(BaseModel):
             if len(sort) > 1:
                 raise NotImplementedError(f'UNSUPPORTED sort: {sort}')
             #
-            sort = sort[0]
-            records.sort(key=lambda x: getattr(x, sort[0]), reverse=(True if sort[1] == -1 else False))
+            field, order = sort[0]
+            records.sort(key=lambda x: x.get(field), reverse=(True if order == -1 else False))
         # pagination
         if 'skip' in kwargs:
             records = records[kwargs['skip']:kwargs['skip'] + kwargs['limit']]
         #
-        return records
+        return [cls(r) for r in records]
 
     @classmethod
     def count(cls, filter_=None, **kwargs):
@@ -103,9 +104,10 @@ class CacheModel(BaseModel):
         #
         if isinstance(filter_or_id, dict):
             records = [record for record in collection if cls.match_record(record, filter_or_id)]
-            return records[0] if records else None
         else:
-            return next((record for record in collection if record.id == filter_or_id), None)
+            records = [record for record in collection if record['id'] == filter_or_id]
+        #
+        return cls(records[0]) if records else None
 
     @classmethod
     def find_by_ids(cls, ids, *args, **kwargs):
@@ -122,7 +124,7 @@ class CacheModel(BaseModel):
         #
         filter_.update({'id': {'$in': ids}})
         #
-        records = list(cls.find(filter_, *args, **kwargs))
+        records = cls.find(filter_, *args, **kwargs)
         records.sort(key=lambda i: ids.index(i.id))
         #
         return records
@@ -136,7 +138,7 @@ class CacheModel(BaseModel):
             if count > limit:
                 count = limit
         start = (page - 1) * per_page
-        records = list(cls.find(filter_, skip=start, limit=per_page, **kwargs))
+        records = cls.find(filter_, skip=start, limit=per_page, **kwargs)
         pagination = Pagination(page, per_page, count)
         return records, pagination
 
@@ -164,13 +166,13 @@ class CacheModel(BaseModel):
         collection = self.get_collection(**kwargs)
         if insert_with_id or not self.id:
             # get the max id, start from 1
-            self.id = max(list(map(lambda x: x.id, collection)) or [0]) + 1
-            collection.append(self)
+            self.id = max(list(map(lambda x: x['id'], collection)) or [0]) + 1
+            collection.append(self.dict())
             return True
         else:
-            indexes = [index for index, record in enumerate(collection) if record.id == self.id]
+            indexes = [index for index, record in enumerate(collection) if record['id'] == self.id]
             if indexes:
-                collection[indexes[0]] = self
+                collection[indexes[0]] = self.dict()
                 return True
             else:
                 return False
@@ -178,7 +180,7 @@ class CacheModel(BaseModel):
     def delete(self, **kwargs):
         """ Delete self form cache. """
         collection = self.get_collection(**kwargs)
-        indexes = [index for index, record in enumerate(collection) if record.id == self.id]
+        indexes = [index for index, record in enumerate(collection) if record['id'] == self.id]
         if indexes:
             del collection[indexes[0]]
             return True

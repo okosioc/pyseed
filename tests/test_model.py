@@ -170,14 +170,14 @@ def test_model():
     assert schema['searchables'] == ['name__like', 'status']
     # Relation schema
     assert schema['relations'] == ['Team']
-    assert 'is_relation' not in schema['properties']['sibling']
-    assert schema['properties']['team']['is_relation']
+    assert 'is_out_relation' not in schema['properties']['sibling']
+    assert schema['properties']['team']['is_out_relation']
     assert schema['properties']['team']['properties']['name']['type'] == 'string'
     assert schema['properties']['team']['properties']['_id']['py_type'] == 'ObjectId'
     assert schema['properties']['team_id']['py_type'] == 'ObjectId'
     team_schema = Team.schema()
     assert team_schema['properties']['members']['type'] == 'array'
-    assert team_schema['properties']['members']['is_relation']
+    assert team_schema['properties']['members']['is_back_relation']
     assert 'email' in team_schema['properties']['members']['items']['properties']
     assert team_schema['read_fields'] == ['logo', 'name', 'phone', 'remarks', 'managers']
     #

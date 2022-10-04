@@ -105,7 +105,7 @@ def test_crud():
 
     # relation many to one
     del team1.members
-    assert team1.members == [user3, user1]  # sort DESCENDING
+    assert list(map(lambda x:x.id, team1.members)) == [user3.id, user1.id]  # sort DESCENDING
 
     # relation many-to-many
     project1 = CProject(name='project1', members=[user1, user2])

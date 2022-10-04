@@ -1246,12 +1246,11 @@ class BaseModel(metaclass=ModelMeta):
                     # relation
                     if isinstance(f_t, RelationField):
                         field_schema.update({'is_relation': True})
+                        field_schema.update({'is_out_relation': not f_t.is_back_field})
                         field_schema.update({'is_back_relation': f_t.is_back_field})
+                        field_schema.update({'save_field_name': f_t.save_field_name})
                         # relations contains all the related model names, do not include any back relations
                         if not f_t.is_back_field:
-                            #
-                            field_schema.update({'save_field_name': f_t.save_field_name})
-                            #
                             current_relations.setdefault(f_type.__name__, [])
                             current_relations[f_type.__name__] += [f_n]
                             if inner_type and 'relations' in inner_type:
