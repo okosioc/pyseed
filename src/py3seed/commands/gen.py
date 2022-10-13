@@ -126,7 +126,7 @@ def _gen(s: str):
     #
     # Parse seed file, which is in yaml format
     # e.g,
-    # template: apple
+    # template: template-apple
     # blueprints:
     #   - name: dashboard
     #     views:
@@ -138,15 +138,14 @@ def _gen(s: str):
     with open(seed_file) as stream:
         try:
             seed_content = yaml.safe_load(stream)
-            # TODO: Validate the seed content
         except yaml.YAMLError as e:
             logger.error(f'Can not parse seed file {seed_file}, {e}')
             return False
     #
-    # Get template name from seed file, and then use .name/seed name as the template folder, as one template can support many platforms
-    # e.g, app.sd using template apple -> .apple/app/
+    # Get template name from seed file, and then use name/seed name as the template folder, as one template can support many platforms
+    # e.g, app.sd using template apple -> apple/app/
     #
-    template_path = os.path.join('.' + seed_content['template'], s)
+    template_path = os.path.join(seed_content['template'], s)
     if not os.path.exists(template_path):
         # TODO: Download template to the folder
         logger.error(f'Can not find template folder {template_path}')
@@ -182,7 +181,7 @@ def _gen(s: str):
     for bp in seed_content['blueprints']:  # Blueprints
         bp_name = bp['name']
         logger.info(f'{bp_name}/')
-        blueprint = {'views': [], **generate_names(bp_name)}
+        blueprint = {'views': [], 'params': bp.get('params', {}), **generate_names(bp_name)}
         models_by_name = {}
         for v in bp['views']:  # Views
             v_name = v['name']
@@ -314,6 +313,7 @@ def _recursive_render(t_base, o_base, name, context, env):
     else:
         for o_name in out_names:
             o_path = os.path.join(o_base, o_name)
+            # TODO: Merge logic for non-template files, e.g, layout files such as demo.html
             logger.debug(f'copy {o_name}')
             shutil.copyfile(t_path, o_path)
             shutil.copymode(t_path, o_path)
@@ -345,7 +345,7 @@ def _recursive_render(t_base, o_base, name, context, env):
                     exception.translated = False
                     raise
                 rendered = tmpl.render(**o_context)
-                #
+                # TODO: Merge logic for generated file
                 with open(o_file, 'w', encoding='utf-8') as f:
                     f.write(rendered)
                 # Remove template file

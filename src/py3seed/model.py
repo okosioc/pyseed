@@ -217,6 +217,8 @@ class ModelJSONEncoder(json.JSONEncoder):
             return str(o)
         elif isinstance(o, datetime):
             return o.strftime(DATETIME_FORMAT)
+        elif isinstance(o, BaseModel):
+            return o.dict()
 
         return json.JSONEncoder.default(self, o)
 
@@ -804,7 +806,7 @@ class BaseModel(metaclass=ModelMeta):
         # Check if any non-defined fields
         undefined_fields = set(data.keys()) - set(cls.__fields__.keys())
         if len(undefined_fields) > 0:
-            # Do not raise error for non-defined fields
+            # Do not raise error for non-defined fields, because we are using __dict__ to store data and other dynamic attributes also use __dict__ to store
             # errors.append(f'{cls.__name__}: Found undefined data fields, {undefined_fields}')
             pass
         #
