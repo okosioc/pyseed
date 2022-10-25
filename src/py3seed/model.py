@@ -260,6 +260,7 @@ class ModelField:
         'description',
         'unit',
         'source_field_name',
+        'depends'
     )
 
     def __init__(self,
@@ -267,7 +268,7 @@ class ModelField:
                  default: Any = Undefined, required: bool = Undefined, editable: bool = Undefined,
                  searchable: Comparator = Undefined, sortable: bool = Undefined,
                  format_: Format = None, icon: str = None, title: str = None, description: str = None, unit: str = None,
-                 source_field_name: str = None):
+                 source_field_name: str = None, depends: Any = None):
         """ Init method.
 
         :param type_: annotaion for field, e.g, str or Dict[str, str] or List[Object]
@@ -307,6 +308,11 @@ class ModelField:
         self.unit = unit
         #
         self.source_field_name = source_field_name
+        # depends will not return in schema of a model, instead, it is mainly used to return dynamic data for page rendering and biz logic
+        # e.g,
+        # A tag field defiend in User model, tag: str = ModelField(format_=Format.SELECT, depends=lamdab self: self.team.tags)
+        # In page rendering, you can use user.tag_depends to draw select options
+        self.depends = depends
 
     def __str__(self):
         return f'{self.name}/{self.type}/{self.default}/{self.required}/{self.format}'
@@ -919,6 +925,21 @@ class BaseModel(metaclass=ModelMeta):
         Note: When an attribute is accessed, __getattribute__ is invoked firstly
         and then if the attribute wasn't found, __getattr__ should be invoked.
         """
+        # Return depends data defined in a field, which can be function to return dynamic data
+        if name.endswith('_depends'):
+            name = name.split('_depends')[0]
+            field = self.__class__.__fields__.get(name)
+            if field and field.depends:
+                depends = field.depends
+                if callable(depends):
+                    # check if depends function has arguments
+                    if depends.__code__.co_argcount == 0:
+                        return depends()
+                    else:
+                        return depends(self)  # Can only have one argument at most
+                else:
+                    return depends
+        #
         if name in self.__class__.__fields__:
             field = self.__class__.__fields__[name]
             f_type = field.type
@@ -1120,12 +1141,12 @@ class BaseModel(metaclass=ModelMeta):
     @classmethod
     def find_one(cls, filter_or_id, *args, **kwargs):
         """ abstract method, use it to fetch one related model. """
-        raise NotImplementedError()
+        return None
 
     @classmethod
     def find(cls, *args, **kwargs):
         """ abstract method, use it to fetch many related models. """
-        raise NotImplementedError()
+        return []
 
     @classmethod
     def schema(cls):
@@ -1165,7 +1186,7 @@ class BaseModel(metaclass=ModelMeta):
                 check_parents = [type_.__name__] + parents
                 #
                 properties = {}  # {field_name:field_schema}
-                required, searchables, sortables = [], [], []
+                requires, searchables, sortables = [], [], []
                 current_relations, current_form_relations = {}, {}  # {model_name:[field_name]}, use dict to keep the order
                 inner_relations, inner_form_relations = {}, {}  # {model_name:None}, ditto
                 for f_n, f_t in type_.__fields__.items():
@@ -1236,7 +1257,7 @@ class BaseModel(metaclass=ModelMeta):
                     # required
                     if f_t.required:
                         field_schema.update({'required': True})
-                        required.append(f_n)
+                        requires.append(f_n)
                     # editable
                     field_schema.update({'editable': f_t.editable})
                     # searchable
@@ -1265,9 +1286,9 @@ class BaseModel(metaclass=ModelMeta):
                 obj = {
                     'type': 'object',
                     'properties': properties,
-                    'required': required,
+                    'requires': requires,
                     'editable': True,
-                    'columns': type_.__columns__ if type_.__columns__ else required,  # Using required fields as columns as the default
+                    'columns': type_.__columns__ if type_.__columns__ else requires,  # Using required fields as columns as the default
                     'py_type': type_.__name__,
                     'icon': type_.__icon__ if type_.__icon__ else None,
                     'title': type_.__title__ if type_.__title__ else type_.__name__.upper(),

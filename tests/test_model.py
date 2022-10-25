@@ -16,7 +16,7 @@ from typing import List, Dict, ForwardRef
 import pytest
 from bson import ObjectId
 
-from py3seed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel, ModelField, Comparator, RelationField
+from py3seed import SimpleEnum, DATETIME_FORMAT, MongoModel, BaseModel, ModelField, Comparator, RelationField, Format
 
 
 class UserRole(SimpleEnum):
@@ -79,6 +79,11 @@ class Team(MongoModel):
     '''
 
 
+def evens():
+    """ return evens for depends testing. """
+    return [0, 2, 4, 6, 8]
+
+
 class User(MongoModel):
     """ User definition. """
     name: str = ModelField(searchable=Comparator.LIKE)
@@ -89,6 +94,9 @@ class User(MongoModel):
     point: int = ModelField(editable=False, default=0)
     status: UserStatus = ModelField(default=UserStatus.NORMAL, searchable=Comparator.EQ)
     roles: List[UserRole] = [UserRole.MEMBER]
+
+    odd: int = ModelField(required=False, format_=Format.SELECT, depends=[1, 3, 5, 7, 9])
+    even: int = ModelField(required=False, format_=Format.BUTTONGROUP, depends=evens)
 
     sibling: ForwardRef('User') = None  # Self-referenced
     siblings: List[ForwardRef('User')] = None
@@ -229,7 +237,11 @@ def test_model():
         'posts': [{'title': 'editor', 'content': 'editor'}]
     })
     assert len(admin.posts) == len(editor.posts)
-
+    # Test depends
+    assert admin.odd_depends[0] == 1
+    admin.odd = 1
+    assert len(admin.even_depends) == 5
+    admin.event = 2
     #
     # Test validate
     #
