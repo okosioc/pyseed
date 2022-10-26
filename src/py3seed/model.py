@@ -8,7 +8,6 @@
     :copyright: (c) 2021 by weiminfeng.
     :date: 2021/6/5
 """
-import functools
 import json
 import sys
 from abc import ABCMeta
@@ -308,7 +307,7 @@ class ModelField:
         self.unit = unit
         #
         self.source_field_name = source_field_name
-        # depends will not return in schema of a model, instead, it is mainly used to return dynamic data for page rendering and biz logic
+        # depends is mainly used to return dynamic data for page rendering and biz logic
         # e.g,
         # A tag field defiend in User model, tag: str = ModelField(format_=Format.SELECT, depends=lamdab self: self.team.tags)
         # In page rendering, you can use user.tag_depends to draw select options
@@ -367,45 +366,6 @@ class RelationField(ModelField):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Relation
-#
-
-class relation(object):
-    """ Decorator on a method to tell that it is used to fetch related models.
-
-    class Post(BaseModel):
-        creator_id: ObjectId
-        tag_ids: List[ObjectId]
-
-        @relation
-        def creator(self):
-            return User.find_one(self.creator_id)
-
-        @relation
-        def tags(self):
-            return list(Tag.find({'_id':{'$in':self.tag_ids}})
-
-    p = Post()
-    p.creator
-    p.tags
-
-    Reference:
-    https://docs.python.org/3/howto/descriptor.html#properties
-    https://realpython.com/primer-on-python-decorators/#classes-as-decorators
-    https://docs.python.org/3/reference/datamodel.html#object.__get__
-    """
-
-    def __init__(self, func):
-        functools.update_wrapper(self, func)
-        self.func = func
-
-    def __get__(self, obj, objtype=None):
-        if obj is None:
-            return self
-        return self.func(obj)
-
-
-# ----------------------------------------------------------------------------------------------------------------------
 # Meta class
 #
 
@@ -428,7 +388,7 @@ class ModelMeta(ABCMeta):
         :param namespace: Only contains the fields of current object
         """
         fields: Dict[str, ModelField] = {}
-        relations: Dict[str, relation] = {}
+        relations: Dict[str, RelationField] = {}
         properties: Dict[str, property] = {}
         # TODO: Support callable validators
         slots: Set[str] = namespace.get('__slots__', ())
@@ -554,6 +514,8 @@ class ModelMeta(ABCMeta):
                     # in such case, we need to create activity model, activity.project -> project.activities, activity.user -> user.activities
                     if field.back_field_name is None:
                         pass
+                    #
+                    relations[ann_name] = value
                 # Define a ModelField
                 elif isinstance(value, ModelField):
                     # Supplement field's name and type, as we use annotation to define a model field
@@ -577,16 +539,19 @@ class ModelMeta(ABCMeta):
                             pass
                         elif not isinstance(field.default, ann_type):
                             raise SchemaError(f'{ann_name}: {ann_type} default value is invalid')
-                #
+                # check depends
+                if field.depends is not None:
+                    if callable(field.depends):
+                        pass
+                    elif not isinstance(field.depends, list):
+                        raise SchemaError(f'{ann_name}: {ann_type} depdends value should be list')
                 fields[ann_name] = field
                 if save_field is not None:
                     fields[save_field.name] = save_field
             #
-            # Relations & Properties
+            # Properties
             #
             for attr in namespace:
-                if isinstance(namespace.get(attr), relation):
-                    relations[attr] = namespace.get(attr)
                 if isinstance(namespace.get(attr), property):
                     properties[attr] = namespace.get(attr)
         #
@@ -683,6 +648,7 @@ class ModelMeta(ABCMeta):
                 # Update related model
                 f_type.__fields__[f.back_field_name] = back_field
                 f_type.__slots__ = tuple(f_type.__slots__) + (f.back_field_name,)
+                f_type.__relations__[f.back_field_name] = back_field
 
         #
         return cls
@@ -1002,11 +968,7 @@ class BaseModel(metaclass=ModelMeta):
                     self.__setattr__(name, default)
             #
             return default
-        # Because __dict__ is overwrited by values, so we need invoke relation mannaully
-        if name in self.__class__.__relations__:
-            rel = self.__class__.__relations__[name]
-            return rel.__get__(self)
-        # Invoke property mannaully
+        # Because __dict__ is overwrited by values, so we need to invoke property mannaully
         if name in self.__class__.__properties__:
             prp = self.__class__.__properties__[name]
             return prp.__get__(self)
@@ -1266,6 +1228,9 @@ class BaseModel(metaclass=ModelMeta):
                     # sortable
                     if f_t.sortable is True:
                         sortables.append(f_n)
+                    # depends, only update it to true, the you can access it by {field_name}_depends in page rendering or biz logic
+                    if f_t.depends:
+                        field_schema.update({'depends': True})
                     # relation
                     if isinstance(f_t, RelationField):
                         field_schema.update({'is_relation': True})
