@@ -545,6 +545,7 @@ class ModelMeta(ABCMeta):
                         pass
                     elif not isinstance(field.depends, list):
                         raise SchemaError(f'{ann_name}: {ann_type} depdends value should be list')
+                #
                 fields[ann_name] = field
                 if save_field is not None:
                     fields[save_field.name] = save_field
@@ -583,11 +584,20 @@ class ModelMeta(ABCMeta):
                 # e.g,
                 # if use check_type.__fields__, when checking project.members, will fall into user.team and team.members recursion
                 # because the import mechanism, it is not possible to make explicit reference between user and team, so using annotations can prevent the recursion
-                for a_n, a_t in check_type.__dict__.get('__annotations__', {}).items():
-                    _iter(a_n, a_t, level + (1 if is_in_list else 0))
+                for c_n, c_t in check_type.__dict__.get('__annotations__', {}).items():
+                    c_f = check_type.__fields__[c_n]
+                    # Skip relation field
+                    if isinstance(c_f, RelationField):
+                        continue
+                    #
+                    _iter(c_n, c_t, level + (1 if is_in_list else 0))
 
         #
         for f in fields.values():
+            # Skip relation field
+            if isinstance(f, RelationField):
+                continue
+            #
             _iter(f.name, f.type, 0)
         #
         if max_list_depth >= 3:
@@ -720,21 +730,26 @@ class BaseModel(metaclass=ModelMeta):
         # Validate against schema
         # print(f'Validate {cls.__name__} with {data}')
         for field_name, field_type in cls.__fields__.items():
-            # Skip relation field's validation
+            # Skip recursive validation in relation value, just keep the relation value
+            # please note: in save logic, we need to skip relation field, e.g, in mongosupport, we use self.dict(include_relations=False)
             if isinstance(field_type, RelationField):
+                relation_value = data.get(field_name, Undefined)
+                if relation_value is not Undefined:
+                    data[field_name] = relation_value
+                #
                 continue
             #
             # Update id/ids field created by relation field
-            # But can not do update in back relation field
+            # But can NOT do update in back relation field
             # e.g,
             # user.team -> team.members, team_id is saved in user model, we can use user.team = another team to update it
-            # However, it is not supported to update by team.members.append(user), because it is complex to implement this:
-            #   Remember which users are removed and appended from team
-            #   Add transaction support to update these users before updating team object
+            # However, it is not supported to update by team.members.append(user), because it is complex to implement below:
+            #   - Need to implement some logic to remember which users are removed and appended from team, especially there are huge amount of members
+            #   - Add transaction support to update these users before updating team object
             #
             if field_type.source_field_name is not None:  # e.g, team_id is created by team relation, so source field name of team_id is team
                 source_field = cls.__fields__[field_type.source_field_name]
-                relation_value = data.get(source_field.name, Undefined)  # get team value
+                relation_value = data.get(source_field.name, Undefined)  # e.g, get team value
                 # RelationField's value is lazy loaded, undefined means it is not load, so trust the value in current field
                 if relation_value is Undefined:
                     pass
@@ -755,7 +770,7 @@ class BaseModel(metaclass=ModelMeta):
                                     id_ = relation_type.__id_type__(id_)
                                 #
                                 update_value.append(id_)
-                    else:
+                    elif relation_value is not None:
                         relation_type = source_field.type
                         if isinstance(relation_value, dict):
                             id_ = relation_value.get(relation_type.__id_name__)

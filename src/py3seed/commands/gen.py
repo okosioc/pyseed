@@ -164,7 +164,7 @@ def _gen(s: str):
     #
     models = {}
     for m in registered_models:
-        logger.debug(f'Load model {m.__name__}')
+        logger.debug(f'Load model {m.__name__} with relations {list(m.__relations__.keys())}')
         models[m.__name__] = {'schema': m.schema(), **generate_names(m.__name__)}
     #
     logger.info(f'Found {len(models)} registered models: {list(models.keys())}')
