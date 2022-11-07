@@ -1281,9 +1281,11 @@ class BaseModel(metaclass=ModelMeta):
                 obj['form'] = parse_layout(type_.__form__)[0] if type_.__form__ else layout
                 obj['groups'] = [parse_layout(g)[0] for g in type_.__groups__]
                 # each column in layout can be blank('')/hyphen(-)/summary($)/group(number)/field(string)/inner fields(has children) suffixed with query and span string
-                # read_fields/form_fields just return valid field names
+                # read_fields/form_fields just return valid field names, read_formats/form_formats return needed formats correspondingly
                 obj['read_fields'] = list(iterate_layout(obj['read'], obj['groups']))
+                obj['read_formats'] = list(set(f['format'] for f in obj['read_fields'] if 'format' in f))
                 obj['form_fields'] = list(iterate_layout(obj['form'], obj['groups']))
+                obj['form_formats'] = list(set(f['format'] for f in obj['form_fields'] if 'format' in f))
                 # searchables, [field__comparator]
                 obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
                 # sortables, [(field_name, 1/-1)]
