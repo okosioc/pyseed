@@ -56,10 +56,10 @@ class Post(BaseModel):
 
 class Team(MongoModel):
     """ Team definition. """
-    name: str
+    name: str = ModelField(searchable=Comparator.LIKE)
     phone: str = None
-    logo: str = None
-    remarks: str = None
+    logo: str = ModelField(required=False, format_=Format.IMAGE)
+    remarks: str = ModelField(required=False, format_=Format.TEXTAREA)
     managers: List[str] = None
     #
     update_time: datetime = None
@@ -76,6 +76,9 @@ class Team(MongoModel):
     ]
     __read__ = '''
     $, (0, 1)
+    '''
+    __form__ = '''
+    0#4, 1#8
     '''
 
 
@@ -188,6 +191,7 @@ def test_model():
     assert team_schema['properties']['members']['is_back_relation']
     assert 'email' in team_schema['properties']['members']['items']['properties']
     assert team_schema['read_fields'] == ['logo', 'name', 'phone', 'remarks', 'managers']
+    assert team_schema['search_fields'] == ['name']
     #
     # Test access
     #
@@ -242,6 +246,7 @@ def test_model():
     admin.odd = 1
     assert len(admin.even_depends) == 5
     admin.event = 2
+
     #
     # Test validate
     #
