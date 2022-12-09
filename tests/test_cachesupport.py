@@ -45,12 +45,11 @@ def test_crud():
     """ Test cases for crud. """
     # Schema
     cuser_schema = CUser.schema()
-    assert cuser_schema['relations'] == ['CTeam']
-    assert cuser_schema['form_relations'] == ['CTeam']
+    assert cuser_schema['relations'] == ['CTeam', 'CProject']
     assert cuser_schema['id_name'] == 'id'
     assert cuser_schema['id_type'] == 'int'
     cproject_schema = CProject.schema()
-    assert cproject_schema['form_relations'] == ['CTeam', 'CUser']
+    assert cproject_schema['relations'] == ['CUser']
 
     # Init
     assert CUser.delete_many()

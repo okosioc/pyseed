@@ -191,7 +191,7 @@ def test_model():
     assert team_schema['properties']['members']['is_back_relation']
     assert 'email' in team_schema['properties']['members']['items']['properties']
     assert team_schema['read_fields'] == ['logo', 'name', 'phone', 'remarks', 'managers']
-    assert team_schema['search_fields'] == ['name']
+    assert team_schema['searchable_fields'] == ['name']
     #
     # Test access
     #

@@ -343,7 +343,7 @@ class RelationField(ModelField):
                  **kwargs):
         """ Init method.
 
-        :param save_field_name: The name to use for saving current relation, if it is none, will use xxx_id/xxx_ids by default. The back field in related model have same value, used for search the original model
+        :param save_field_name: The name to use for saving current relation, if it is none, will use xxx_id/xxx_ids by default. The back field in related model have same value, used for searching the original model
         :param save_field_order: If the field is List, use this order when loading and saving
         :param back_field_name: The name to use for the relation from the related model back to this one, if it is none, do not create back field in related model
         :param back_field_is_list: If back field is list
@@ -1164,8 +1164,7 @@ class BaseModel(metaclass=ModelMeta):
                 #
                 properties = {}  # {field_name:field_schema}
                 requires, searchables, sortables = [], [], []
-                current_relations, current_form_relations = {}, {}  # {model_name:[field_name]}, use dict to keep the order
-                inner_relations, inner_form_relations = {}, {}  # {model_name:None}, ditto
+                relations = {}  # {model_name:[field_name]}, use dict to keep the order
                 for f_n, f_t in type_.__fields__.items():
                     field_schema = {}
                     f_origin = get_origin(f_t.type)
@@ -1252,14 +1251,9 @@ class BaseModel(metaclass=ModelMeta):
                         field_schema.update({'is_out_relation': not f_t.is_back_field})
                         field_schema.update({'is_back_relation': f_t.is_back_field})
                         field_schema.update({'save_field_name': f_t.save_field_name})
-                        # relations contains all the related model names, do not include any back relations
-                        if not f_t.is_back_field:
-                            current_relations.setdefault(f_type.__name__, [])
-                            current_relations[f_type.__name__] += [f_n]
-                            if inner_type and 'relations' in inner_type:
-                                inner_relations.update({k: None for k in inner_type['relations']})
-                                inner_form_relations.update({k: None for k in inner_type['form_relations']})
-
+                        #
+                        relations.setdefault(f_type.__name__, [])
+                        relations[f_type.__name__] += [f_n]
                     #
                     properties[f_n] = field_schema
                 #
@@ -1284,16 +1278,13 @@ class BaseModel(metaclass=ModelMeta):
                 # read_fields/form_fields just return valid field names
                 obj['read_fields'] = list(iterate_layout(obj['read'], obj['groups']))
                 obj['form_fields'] = list(iterate_layout(obj['form'], obj['groups']))
-                # searchables, [field__comparator]
+                # searchables, [field__comparator|field]
                 obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
                 obj['searchable_fields'] = [s[0] for s in searchables]
                 # sortables, [(field_name, 1/-1)]
                 obj['sortables'] = sortables
-                # relations recrusively
-                inner_relations.update(current_relations)
-                obj['relations'] = [k for k in inner_relations.keys() if k != type_.__name__]  # skip self because inner_relations may contains it
-                inner_form_relations.update({k: None for k, v in current_relations.items() if any((True for vv in v if vv in obj['form_fields']))})
-                obj['form_relations'] = [k for k in inner_form_relations.keys() if k != type_.__name__]
+                # relations
+                obj['relations'] = [k for k in relations.keys() if k != type_.__name__]  # skip self
                 # id_name & id_type, used for relation inputs
                 obj['id_name'] = type_.__id_name__
                 obj['id_type'] = type_.__id_type__.__name__ if type_.__id_type__ else None
