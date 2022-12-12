@@ -12,7 +12,7 @@
 import importlib_metadata
 
 from .error import SeedError, SchemaError, DataError, DatabaseError, PathError
-from .model import SimpleEnumMeta, SimpleEnum, Format, Comparator, DATETIME_FORMAT, ModelJSONEncoder, \
+from .model import SimpleEnumMeta, SimpleEnum, Format, Comparator, Ownership, DATETIME_FORMAT, ModelJSONEncoder, \
     ModelField, RelationField, BaseModel
 from .admin import register, registered_models
 from .utils import Pagination

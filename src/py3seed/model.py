@@ -170,6 +170,17 @@ class Comparator(SimpleEnum):
     LIKE = 'like'  # Need to convert this to regex
 
 
+class Ownership(SimpleEnum):
+    """ Dependencies between two model, mainly used in many to one relation.
+
+    e.g,
+    task.project -> project.tasks, one project owns many tasks, means we can create task directly in a project detail page.
+    task.user -> user.tasks, one user has many tasks, but not owns them, means tasks should be created in other way and then you can assign them to different user.
+    """
+    HAVE = 'have'
+    OWN = 'own'
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # Constants
 #
@@ -331,6 +342,7 @@ class RelationField(ModelField):
         'back_field_title',
         'back_field_description',
         'back_field_unit',
+        'ownership',
         'is_back_field',
     )
 
@@ -339,7 +351,8 @@ class RelationField(ModelField):
                  save_field_name: str = Undefined, save_field_order: List[Tuple[str, int]] = [],
                  back_field_name: str = None, back_field_is_list: bool = False, back_field_order: List[Tuple[str, int]] = [],
                  back_field_format: Format = None, back_field_icon: str = None, back_field_title: str = None,
-                 back_field_description: str = None, back_field_unit: str = None, is_back_field: bool = False,
+                 back_field_description: str = None, back_field_unit: str = None,
+                 ownership: Ownership = None, is_back_field: bool = False,
                  **kwargs):
         """ Init method.
 
@@ -362,6 +375,8 @@ class RelationField(ModelField):
         self.back_field_title = back_field_title
         self.back_field_description = back_field_description
         self.back_field_unit = back_field_unit
+        #
+        self.ownership = ownership
         self.is_back_field = is_back_field
 
 
@@ -510,7 +525,7 @@ class ModelMeta(ABCMeta):
                     )
                     # back_field_name should always has a meaningful value, if it is none, do not create back field in related object
                     # e.g,
-                    # project.activities.user -> user, do not need to create back_field in user model as it is hard to search all the activities for user
+                    # project.activities.user -> user, no need to create back_field in user model as it is hard to search all the activities for user
                     # in such case, we need to create activity model, activity.project -> project.activities, activity.user -> user.activities
                     if field.back_field_name is None:
                         pass
@@ -646,6 +661,7 @@ class ModelMeta(ABCMeta):
                     editable=False,  # ditto
                     format_=f.back_field_format, icon=f.back_field_icon, title=f.back_field_title, description=f.back_field_description,
                     unit=f.back_field_unit,
+                    ownership=f.ownership,
                     is_back_field=True,  # Mark this field to be a back field created by a relation field
                 )
                 f_origin = get_origin(f.type)
@@ -1248,8 +1264,13 @@ class BaseModel(metaclass=ModelMeta):
                     # relation
                     if isinstance(f_t, RelationField):
                         field_schema.update({'is_relation': True})
+                        #
+                        if f_t.ownership:
+                            field_schema.update({'ownership': f_t.ownership})
+                        #
                         field_schema.update({'is_out_relation': not f_t.is_back_field})
                         field_schema.update({'is_back_relation': f_t.is_back_field})
+                        #
                         field_schema.update({'save_field_name': f_t.save_field_name})
                         #
                         relations.setdefault(f_type.__name__, [])

@@ -302,12 +302,12 @@ def _recursive_render(t_base, o_base, name, context, env):
             # Copy the whole folder, use sorted() to make sure files starting with _ can be copied firtly
             for d in sorted(os.listdir(t_path)):
                 _recursive_render(t_path, o_path, d, context, env)
-            # Remove the files startswith #, which has been used for rendering
+            # Remove the __includes subfolder, which has been used for rendering
             for f in os.listdir(o_path):
                 fp = os.path.join(o_path, f)
-                if os.path.isfile(fp) and f.startswith('#'):
+                if os.path.isdir(fp) and f == '__includes':
                     logger.debug(f'delete {f}')
-                    os.remove(fp)
+                    shutil.rmtree(fp)
             #
             logger.debug(f'done {o_path}')
     #
@@ -321,8 +321,7 @@ def _recursive_render(t_base, o_base, name, context, env):
         #
         # Render file
         # 1. Change working folder to ., so that jinja2 works ok
-        # 2. Files with name starts with # will be include for rendering, so NO need to render
-        # 3. Files with name ends with jinja2 will be render
+        # 2. Files with name ends with jinja2 will be render
         #
         o_base = os.path.abspath(o_base)
         with work_in(o_base):
@@ -331,7 +330,7 @@ def _recursive_render(t_base, o_base, name, context, env):
             o_context = {k: v for k, v in context.items() if not k.startswith('__')}
             #
             for i, o_name in enumerate(out_names):
-                if o_name.startswith('#') or not o_name.endswith('.jinja2'):
+                if not o_name.endswith('.jinja2'):
                     continue
                 #
                 o_file = o_name.replace('.jinja2', '')

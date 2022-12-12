@@ -150,6 +150,7 @@ def parse_layout(body, models={}):
                 if '.' in model_name:
                     model_name, sub = model_name.split('.')
                 # Find model by name, ignoring cases and underlines
+                # e.g, DemoProject-read, demo_project_read can match model DemoProject
                 found = next(
                     (m for n, m in models.items() if n.lower() in [model_name.lower(), inflection.camelize(model_name).lower()]), None
                 )
