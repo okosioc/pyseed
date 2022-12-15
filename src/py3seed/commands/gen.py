@@ -236,7 +236,7 @@ def _recursive_render(t_base, o_base, name, context, env):
     t_path = os.path.join(t_base, name)
     logger.debug(f'template {t_path}')
     t_name = ''.join(name.split())  # Remove all the whitespace chars from name
-    out_names = []
+    out_names = [t_name]  # if no matched list or varible syntax, copy the file directly
     out_key, out_values = None, []
     #
     # Check list syntax, i.e, {{#name}}
@@ -256,7 +256,10 @@ def _recursive_render(t_base, o_base, name, context, env):
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'seeds':
             out_key = '__seed'
-            out_values = context['seeds']  # seeds can be accessed at context level
+            # seeds can be accessed at context level, which means it can be used in different views, there is another way to access seed, that is blueprint->view->seed, we often use it generate backend logic
+            # NOTE: do NOTE render the seeds having suffix, e.g, product-read-1, block-read-feature-1
+            # There seeds are always highly customized, so need to copy them from template folder to output folder
+            out_values = [s for s in context['seeds'] if not s.get('suffix')]
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'models':
             out_key = '__model'
@@ -284,9 +287,7 @@ def _recursive_render(t_base, o_base, name, context, env):
                 out_values = [context[f'__{key}']]
                 out_names = [t_name.replace(syntax, v['name_kebab']) for v in out_values]
             else:
-                out_names = [t_name]
-        else:
-            out_names = [t_name]
+                raise TemplateError(f'Unsupported varible syntax: {syntax}')
     #
     # Copy & Render
     #
@@ -306,7 +307,7 @@ def _recursive_render(t_base, o_base, name, context, env):
             for f in os.listdir(o_path):
                 fp = os.path.join(o_path, f)
                 if os.path.isdir(fp) and f == '__includes':
-                    logger.debug(f'delete {f}')
+                    logger.debug(f'delete {f} subfolder')
                     shutil.rmtree(fp)
             #
             logger.debug(f'done {o_path}')
@@ -314,10 +315,22 @@ def _recursive_render(t_base, o_base, name, context, env):
     else:
         for o_name in out_names:
             o_path = os.path.join(o_base, o_name)
-            # TODO: Merge logic for non-template files, e.g, layout files such as demo.html
-            logger.debug(f'copy {o_name}')
-            shutil.copyfile(t_path, o_path)
-            shutil.copymode(t_path, o_path)
+            # Overwrite existing file by default
+            need_copy = True
+            # If file name startswith !, do NOT overwrite existing file
+            if o_name.startswith('!'):
+                o_name = o_name[1:]
+                o_path = os.path.join(o_base, o_name)
+                if os.path.exists(o_path):
+                    need_copy = False
+            #
+            if need_copy:
+                logger.debug(f'copy {o_name}')
+                # TODO: Merge logic for non-template files, e.g, layout files such as demo.html
+                shutil.copyfile(t_path, o_path)
+                shutil.copymode(t_path, o_path)
+            else:
+                logger.debug(f'skip {o_name}')
         #
         # Render file
         # 1. Change working folder to ., so that jinja2 works ok

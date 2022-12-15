@@ -140,9 +140,10 @@ def parse_layout(body, models={}):
             # If is seed file's view layout, parse model and action
             if models:
                 # model-action-suffix
-                # Suffix is used to distinguish seeds with different params, e.g:
-                #   user-form-0?is_horizontal=true
-                #   user-form-1?is_horizontal=false
+                # Only generate for seeds w/o suffix
+                #   block-read, generate
+                #   block-read-feature-1, skip
+                #   block-read-feature-2, skip
                 tokens = column_str.split('-')
                 model_name = tokens[0]
                 sub = None
@@ -156,7 +157,8 @@ def parse_layout(body, models={}):
                 )
                 if found:
                     action = tokens[1]
-                    ret.update({'model': found, 'sub': sub, 'action': action})
+                    suffix = '-'.join(tokens[2:])
+                    ret.update({'model': found, 'sub': sub, 'action': action, 'suffix': suffix})
                     # Append to return seeds
                     seeds.append(ret)
         # Names
