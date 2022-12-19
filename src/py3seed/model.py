@@ -1195,9 +1195,8 @@ class BaseModel(metaclass=ModelMeta):
                         if f_type.__name__ in check_parents:
                             field_schema.update({
                                 'type': 'array',
-                                # https://json-schema.org/understanding-json-schema/structuring.html#recursion
-                                # Your program should replace the {$ref:} with reference object's schema
-                                'items': {'$ref': f'#{f_type.__name__}'},
+                                # Your program should use the reference object's schema to replace `items` value
+                                'items': {'ref': f_type.__name__},
                                 'py_type': f'List[{f_type.__name__}]',
                             })
                         else:
@@ -1213,9 +1212,9 @@ class BaseModel(metaclass=ModelMeta):
                         if f_type.__name__ in check_parents:
                             field_schema.update({
                                 'type': 'object',
-                                # Your program should replace the {$ref:} with properties of reference object's schema only
+                                # Your program should use the reference object's schema to replace `properties` under current schema
                                 # But should NOT overwrite the icon/title/description/... as these fields may use different values
-                                '$ref': f'#{f_type.__name__}',
+                                'ref': f_type.__name__,
                                 'py_type': f_type.__name__,
                             })
                         else:
