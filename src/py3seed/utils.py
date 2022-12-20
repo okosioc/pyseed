@@ -140,10 +140,12 @@ def parse_layout(body, models={}):
             # If is seed file's view layout, parse model and action
             if models:
                 # model-action-suffix
-                # Only generate for seeds w/o suffix
-                #   block-read, generate
-                #   block-read-feature-1, skip
-                #   block-read-feature-2, skip
+                # Only generate for seeds w/o alphanumeric suffix
+                #   Block-read, generate
+                #   Block-read-feature-1, skip
+                #   Block-read-feature-2, skip
+                #   Quote-query, generate
+                #   Quote-query-1, generate
                 tokens = column_str.split('-')
                 model_name = tokens[0]
                 sub = None
@@ -158,6 +160,13 @@ def parse_layout(body, models={}):
                 if found:
                     action = tokens[1]
                     suffix = '-'.join(tokens[2:])
+                    # NOTE: The numeric suffix will be ignored so that the seed will be generated, we using it to generate seeds with different params
+                    # e.g,
+                    #   Quote-query?is_card=true
+                    #   Quote-query-1?is_card=true&has_search=false
+                    if suffix.isdigit():
+                        suffix = ''
+                    #
                     ret.update({'model': found, 'sub': sub, 'action': action, 'suffix': suffix})
                     # Append to return seeds
                     seeds.append(ret)

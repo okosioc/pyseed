@@ -43,6 +43,7 @@ def connect(uri, alias=DEFAULT_CONNECTION_NAME, **kwargs):
     global _connections
     if alias not in _connections:
         _register_connection(alias, name, uri, username, password, **kwargs)
+    #
     return _get_connection(alias)
 
 
@@ -60,7 +61,6 @@ def disconnect(alias=DEFAULT_CONNECTION_NAME):
 
 def _register_connection(alias, name, uri, username=None, password=None,
                          read_preference=ReadPreference.PRIMARY,
-                         authentication_source=None,
                          **kwargs):
     """ Register connection uri. """
     global _connection_settings
@@ -70,7 +70,6 @@ def _register_connection(alias, name, uri, username=None, password=None,
         'read_preference': read_preference,
         'username': username,
         'password': password,
-        'authentication_source': authentication_source
     }
     conn_settings.update(kwargs)
     _connection_settings[alias] = conn_settings
@@ -88,42 +87,25 @@ def _get_connection(alias=DEFAULT_CONNECTION_NAME, reconnect=False):
             msg = 'Connection with alias "%s" has not been defined' % alias
             if alias == DEFAULT_CONNECTION_NAME:
                 msg = 'You have not defined a default connection'
+            #
             raise DatabaseError(msg)
-        # Check existing connections that can be shared for current alias
+        # Get connection settings
         conn_settings = _connection_settings[alias].copy()
         conn_settings.pop('name', None)
-        conn_settings.pop('username', None)
-        conn_settings.pop('password', None)
-        conn_settings.pop('authentication_source', None)
-
-        """
-        Every MongoClient instance has a built-in connection pool.
-        The client instance opens one additional socket per server for monitoring the server’s state.
-        """
-        connection_class = MongoClient
-
         try:
-            connection = None
-            # Check for shared connections
-            connection_settings_iterator = (
-                (db_alias, settings.copy()) for db_alias, settings in _connection_settings.items())
-            for db_alias, connection_settings in connection_settings_iterator:
-                connection_settings.pop('name', None)
-                connection_settings.pop('username', None)
-                connection_settings.pop('password', None)
-                connection_settings.pop('authentication_source', None)
-                if conn_settings == connection_settings and _connections.get(db_alias, None):
-                    connection = _connections[db_alias]
-                    break
-
-            _connections[alias] = connection if connection else connection_class(**conn_settings)
+            # Every MongoClient instance has a built-in connection pool.
+            # Authenticating multiple users on the same client conflicts with support for logical sessions in MongoDB 3.6+. To authenticate as multiple users, create multiple instances of MongoClient
+            # https://pymongo.readthedocs.io/en/stable/migrate-to-pymongo4.html#database-authenticate-and-database-logout-are-removed
+            connection_class = MongoClient
+            _connections[alias] = connection_class(**conn_settings)
         except Exception as e:
             raise DatabaseError("Cannot connect to database %s :\n%s" % (alias, e))
+    #
     return _connections[alias]
 
 
 def get_db(alias=DEFAULT_CONNECTION_NAME, reconnect=False):
-    """ Get database """
+    """ Get database. """
     global _dbs
 
     if reconnect:
@@ -132,13 +114,9 @@ def get_db(alias=DEFAULT_CONNECTION_NAME, reconnect=False):
     if alias not in _dbs:
         conn = _get_connection(alias)
         conn_settings = _connection_settings[alias]
-        db = conn[conn_settings['name']]
-        # Authenticate if necessary
-        if conn_settings['username'] and conn_settings['password']:
-            db.authenticate(conn_settings['username'],
-                            conn_settings['password'],
-                            source=conn_settings['authentication_source'])
+        db = conn[conn_settings['name']]  # conn should be an instance of MongoClient, so we need to use db name
         _dbs[alias] = db
+    #
     return _dbs[alias]
 
 

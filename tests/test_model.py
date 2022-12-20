@@ -150,9 +150,9 @@ def test_model():
     assert schema['properties']['name']['editable']
     assert not schema['properties']['point']['editable']
     assert schema['properties']['status']['enum'] == list(UserStatus)
-    assert schema['properties']['sibling']['$ref'] == '#User'
+    assert schema['properties']['sibling']['ref'] == 'User'
     assert schema['properties']['siblings']['type'] == 'array'
-    assert schema['properties']['siblings']['items']['$ref'] == '#User'
+    assert schema['properties']['siblings']['items']['ref'] == 'User'
     assert schema['properties']['posts']['items']['properties']['title']['type'] == 'string'
     assert schema['properties']['posts']['items']['properties']['comments']['items']['properties']['date'][
                'type'] == 'date'
