@@ -13,6 +13,7 @@ import importlib.util
 import logging
 import os
 import re
+import shutil
 import sys
 from typing import List
 
@@ -226,14 +227,18 @@ def _gen(s: str):
         #
         context['blueprints'].append(blueprint)
     #
-    # Do generation logic for each includes, only files with jinja2 ext will be generated
+    # Do generation logic for each includes
+    # NOTE: only files with jinja2 ext will be generated
     #
     env = _prepare_jinja2_env()
+    logger.info(f'Generate template at {output_path}')
     for include in includes:
-        _recursive_render(include, context, env)
+        base = os.path.dirname(include)
+        name = os.path.basename(include)
+        _recursive_render(base, base, name, context, env)
 
 
-def _recursive_render(output, context, env):
+def _recursive_render(t_base, o_base, name, context, env):
     """ Render output folder/file, handle names having list/varible syntax.
 
     Supported Syntax:
@@ -246,41 +251,38 @@ def _recursive_render(output, context, env):
       {{#models}}
       {{model}}
     """
-    logger.debug(f'render {output}')
-    o_base = os.path.dirname(output)
-    o_name = os.path.basename(output)
-    # Remove all the whitespace chars from name
-    o_name = ''.join(o_name.split())
-    out_names = [o_name]  # if no matched list or varible syntax, process directly
+    t_path = os.path.join(t_base, name)
+    t_name = ''.join(name.split())  # Remove all the whitespace chars from name
+    out_names = [t_name]  # if no matched list or varible syntax, process directly
     out_key, out_values = None, []
     #
     # Check list syntax, i.e, {{#name}}
     # This syntax iterate over every item of the list; do not generate anything if empty list and false value
     #
-    match_list = re.search('(\\{\\{#[a-zA-Z._]+\\}\\})', o_name)
+    match_list = re.search('(\\{\\{#[a-zA-Z._]+\\}\\})', t_name)
     if match_list:
         syntax = match_list.group(1)  # => {{#views}}
         key = syntax[3:-2]  # => views
         if key == 'blueprints':
             out_key = '__blueprint'
             out_values = context['blueprints']
-            out_names = [o_name.replace(syntax, v['name']) for v in out_values]
+            out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'views':
             out_key = '__view'
             out_values = context['__blueprint']['views']  # views under current blueprint
-            out_names = [o_name.replace(syntax, v['name']) for v in out_values]
+            out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'seeds':
             out_key = '__seed'
             # seeds can be accessed at context level, which means it can be used in different views, there is another way to access seed, that is blueprint->view->seed, we often use it generate backend logic
             # NOTE: do NOTE render the seeds having suffix, e.g, product-read-1, block-read-feature-1
             out_values = [s for s in context['seeds'] if not s.get('suffix')]
-            out_names = [o_name.replace(syntax, v['name']) for v in out_values]
+            out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'models':
             out_key = '__model'
             # models can be accessed at context level, NOTE: models is dict, {name: {names, schema}}}, so we use values() here
             out_values = list(context['models'].values())
             # names of blueprints/views/seeds are kebab formats because them will be used in the url directly, while modal names are always in camel case because of PEP8
-            out_names = [o_name.replace(syntax, v['name_kebab']) for v in out_values]
+            out_names = [t_name.replace(syntax, v['name_kebab']) for v in out_values]
         else:
             raise TemplateError(f'Unsupported list syntax: {syntax}')
     else:
@@ -288,25 +290,33 @@ def _recursive_render(output, context, env):
         # Check varible syntax, i.e, {{name}}
         # This syntax return the value of the varible
         #
-        match_variable = re.search('(\\{\\{[a-zA-Z._]+\\}\\})', o_name)
+        match_variable = re.search('(\\{\\{[a-zA-Z._]+\\}\\})', t_name)
         if match_variable:
             syntax = match_list.group(1)
             key = syntax[2:-2]
             if key in ['blueprint', 'view', 'seed']:
                 out_key == f'__{key}'
                 out_values = [context[f'__{key}']]
-                out_names = [o_name.replace(syntax, v['name']) for v in out_values]
+                out_names = [t_name.replace(syntax, v['name']) for v in out_values]
             elif key in ['model']:
                 out_key == f'__{key}'
                 out_values = [context[f'__{key}']]
-                out_names = [o_name.replace(syntax, v['name_kebab']) for v in out_values]
+                out_names = [t_name.replace(syntax, v['name_kebab']) for v in out_values]
             else:
                 raise TemplateError(f'Unsupported varible syntax: {syntax}')
     #
     # Render folder recursively
     #
-    if os.path.isdir(output):
+    if os.path.isdir(t_path):
         for i, o_name in enumerate(out_names):
+            # For dir name that has list or varible syntax
+            # e.g,
+            #   www/templates/{{#blueprints}}
+            #     ->
+            #     www/templates/public
+            #     www/templates/dash
+            #     www/templates/demo
+            #     ...
             o_path = os.path.join(o_base, o_name)
             if not os.path.exists(o_path):
                 os.mkdir(o_path)
@@ -314,28 +324,45 @@ def _recursive_render(output, context, env):
             if out_values:
                 context[out_key] = out_values[i]
             # Render recursively
-            for d in sorted(os.listdir(o_path)):
-                _recursive_render(os.path.join(o_path, d), context, env)
+            for d in sorted(os.listdir(t_path)):
+                _recursive_render(t_path, o_path, d, context, env)
     #
     # Render file
-    # 1. Change working folder to ., so that jinja2 works ok
-    # 2. Files with name ends with jinja2 will be render
     #
     else:
+        # Only process jinja2 files
+        if not t_name.endswith('.jinja2'):
+            return
+        # Overwrite with template file content firstly
+        # TODO: Merge logic
+        # e.g,
+        #  1. Files that has list or varible syntax, regenerate each time; The jinjas generated should be removed after generation
+        #  www/templates/seeds/{{#seeds}}.html.jinja2
+        #    ->
+        #    www/templates/seeds/User-form.html.jinja2
+        #    www/templates/seeds/Project-read.html.jinja2
+        #    ...
+        #
+        #  2. Files that is just a jinja, no need to overwrite just render directly; The jinja file should NOT be removed after generation
+        #  www/static/js/enums.js.jinja2
+        for o_name in out_names:
+            o_path = os.path.join(o_base, o_name)
+            if out_key:
+                shutil.copyfile(t_path, o_path)
+                shutil.copymode(t_path, o_path)
+        # Change working folder to ., so that jinja2 works ok
         o_base = os.path.abspath(o_base)
         with work_in(o_base):
+            logger.debug(f'working at {o_base}')
             # Set jinja2's path
             env.loader = FileSystemLoader('.')
             o_context = {k: v for k, v in context.items() if not k.startswith('__')}
             #
             for i, o_name in enumerate(out_names):
-                if not o_name.endswith('.jinja2'):
-                    continue
-                #
                 o_file = o_name.replace('.jinja2', '')
                 logger.debug(f'render {o_file}')
                 # Remove __ so that object can be accessed in template
-                if out_values:
+                if out_key:
                     o_context[out_key[2:]] = out_values[i]
                 #
                 try:
@@ -344,11 +371,12 @@ def _recursive_render(output, context, env):
                     exception.translated = False
                     raise
                 rendered = tmpl.render(**o_context)
-                # TODO: Merge logic for generated file
+                #
                 with open(o_file, 'w', encoding='utf-8') as f:
                     f.write(rendered)
                 # Remove template file
-                os.remove(o_name)
+                if out_key:
+                    os.remove(o_name)
 
 
 def main(args: List[str]) -> bool:
