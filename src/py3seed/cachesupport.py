@@ -21,6 +21,8 @@ CACHES = {}
 
 class CacheModel(BaseModel):
     """ Model in cache. """
+    # TODO: Support __keys__ to mark the key field to be unique
+    __keys__ = []
 
     # id field definition
     __id_name__ = 'id'

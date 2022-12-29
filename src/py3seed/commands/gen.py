@@ -13,7 +13,6 @@ import importlib.util
 import logging
 import os
 import re
-import shutil
 import sys
 from typing import List
 
@@ -118,15 +117,15 @@ def _gen(s: str):
         return False
     # Out dir should be same with seed
     # e.g,
-    #   app.sd -> app
+    #   www.sd -> www
     #   miniapp.sd -> miniapp
     output_path = s
     if not os.path.exists(output_path):
-        os.mkdir(output_path)
+        logger.error(f'Can not find output path {output_path}')
+        return False
     #
     # Parse seed file, which is in yaml format
     # e.g,
-    # template: template-apple
     # blueprints:
     #   - name: dashboard
     #     views:
@@ -142,13 +141,29 @@ def _gen(s: str):
             logger.error(f'Can not parse seed file {seed_file}, {e}')
             return False
     #
-    # Get template name from seed file, and then use name/seed name as the template folder, as one template can support many platforms
-    # e.g, app.sd using template apple -> apple/app/
+    # Parse .pyseed-includes in current folder.
+    # e.g,
+    #   www/static/assets
+    #   www/static/js/enums.js.jinja2
+    #   www/templates/seeds/{{#seeds}}.html.jinja2
+    #   www/templates/{{#blueprints}}
+    #   www/views/{{#blueprints}}.stub.py.jinja2
     #
-    template_path = os.path.join(seed_content['template'], s)
-    if not os.path.exists(template_path):
-        # TODO: Download template to the folder
-        logger.error(f'Can not find template folder {template_path}')
+    includes_file = '.pyseed-includes'
+    includes = []
+    logger.debug('pyseed includes:')
+    with open(includes_file) as file:
+        for line in file:
+            line = line.strip()
+            # skip comments and blank lines
+            if line.startswith('#') or len(line) == 0:
+                continue
+            # only process the folders or files under output path
+            if line.startswith(output_path):
+                includes.append(line)
+                logger.debug('  ' + line)
+    if not includes:
+        logger.error(f'Can not find any valid pyseed includes')
         return False
     #
     # Import models package
@@ -211,17 +226,15 @@ def _gen(s: str):
         #
         context['blueprints'].append(blueprint)
     #
-    # Do generation logic recursively
+    # Do generation logic for each includes, only files with jinja2 ext will be generated
     #
     env = _prepare_jinja2_env()
-    logger.info(f'Generate template {template_path} -> {output_path}')
-    # Use depth-first to copy templates to output path, converting all the names and render in the meanwhile
-    for d in os.listdir(template_path):
-        _recursive_render(template_path, output_path, d, context, env)
+    for include in includes:
+        _recursive_render(include, context, env)
 
 
-def _recursive_render(t_base, o_base, name, context, env):
-    """ Copy folder or file from template folder to output folder, handle names having list/varible syntax.
+def _recursive_render(output, context, env):
+    """ Render output folder/file, handle names having list/varible syntax.
 
     Supported Syntax:
       {{#blueprints}}
@@ -233,40 +246,41 @@ def _recursive_render(t_base, o_base, name, context, env):
       {{#models}}
       {{model}}
     """
-    t_path = os.path.join(t_base, name)
-    logger.debug(f'template {t_path}')
-    t_name = ''.join(name.split())  # Remove all the whitespace chars from name
-    out_names = [t_name]  # if no matched list or varible syntax, copy the file directly
+    logger.debug(f'render {output}')
+    o_base = os.path.dirname(output)
+    o_name = os.path.basename(output)
+    # Remove all the whitespace chars from name
+    o_name = ''.join(o_name.split())
+    out_names = [o_name]  # if no matched list or varible syntax, process directly
     out_key, out_values = None, []
     #
     # Check list syntax, i.e, {{#name}}
     # This syntax iterate over every item of the list; do not generate anything if empty list and false value
     #
-    match_list = re.search('(\\{\\{#[a-zA-Z._]+\\}\\})', t_name)
+    match_list = re.search('(\\{\\{#[a-zA-Z._]+\\}\\})', o_name)
     if match_list:
         syntax = match_list.group(1)  # => {{#views}}
         key = syntax[3:-2]  # => views
         if key == 'blueprints':
             out_key = '__blueprint'
             out_values = context['blueprints']
-            out_names = [t_name.replace(syntax, v['name']) for v in out_values]
+            out_names = [o_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'views':
             out_key = '__view'
             out_values = context['__blueprint']['views']  # views under current blueprint
-            out_names = [t_name.replace(syntax, v['name']) for v in out_values]
+            out_names = [o_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'seeds':
             out_key = '__seed'
             # seeds can be accessed at context level, which means it can be used in different views, there is another way to access seed, that is blueprint->view->seed, we often use it generate backend logic
             # NOTE: do NOTE render the seeds having suffix, e.g, product-read-1, block-read-feature-1
-            # There seeds are always highly customized, so need to copy them from template folder to output folder
             out_values = [s for s in context['seeds'] if not s.get('suffix')]
-            out_names = [t_name.replace(syntax, v['name']) for v in out_values]
+            out_names = [o_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'models':
             out_key = '__model'
             # models can be accessed at context level, NOTE: models is dict, {name: {names, schema}}}, so we use values() here
             out_values = list(context['models'].values())
             # names of blueprints/views/seeds are kebab formats because them will be used in the url directly, while modal names are always in camel case because of PEP8
-            out_names = [t_name.replace(syntax, v['name_kebab']) for v in out_values]
+            out_names = [o_name.replace(syntax, v['name_kebab']) for v in out_values]
         else:
             raise TemplateError(f'Unsupported list syntax: {syntax}')
     else:
@@ -274,68 +288,40 @@ def _recursive_render(t_base, o_base, name, context, env):
         # Check varible syntax, i.e, {{name}}
         # This syntax return the value of the varible
         #
-        match_variable = re.search('(\\{\\{[a-zA-Z._]+\\}\\})', t_name)
+        match_variable = re.search('(\\{\\{[a-zA-Z._]+\\}\\})', o_name)
         if match_variable:
             syntax = match_list.group(1)
             key = syntax[2:-2]
             if key in ['blueprint', 'view', 'seed']:
                 out_key == f'__{key}'
                 out_values = [context[f'__{key}']]
-                out_names = [t_name.replace(syntax, v['name']) for v in out_values]
+                out_names = [o_name.replace(syntax, v['name']) for v in out_values]
             elif key in ['model']:
                 out_key == f'__{key}'
                 out_values = [context[f'__{key}']]
-                out_names = [t_name.replace(syntax, v['name_kebab']) for v in out_values]
+                out_names = [o_name.replace(syntax, v['name_kebab']) for v in out_values]
             else:
                 raise TemplateError(f'Unsupported varible syntax: {syntax}')
     #
-    # Copy & Render
+    # Render folder recursively
     #
-    if os.path.isdir(t_path):
+    if os.path.isdir(output):
         for i, o_name in enumerate(out_names):
             o_path = os.path.join(o_base, o_name)
-            logger.debug(f'output {o_path}')
             if not os.path.exists(o_path):
                 os.mkdir(o_path)
-            # Can use this in sub folders and files
+            # Can use this context value in sub folders and files
             if out_values:
                 context[out_key] = out_values[i]
-            # Copy the whole folder, use sorted() to make sure files starting with _ can be copied firtly
-            for d in sorted(os.listdir(t_path)):
-                _recursive_render(t_path, o_path, d, context, env)
-            # Remove the __includes subfolder, which has been used for rendering
-            for f in os.listdir(o_path):
-                fp = os.path.join(o_path, f)
-                if os.path.isdir(fp) and f == '__includes':
-                    logger.debug(f'delete {f} subfolder')
-                    shutil.rmtree(fp)
-            #
-            logger.debug(f'done {o_path}')
+            # Render recursively
+            for d in sorted(os.listdir(o_path)):
+                _recursive_render(os.path.join(o_path, d), context, env)
+    #
+    # Render file
+    # 1. Change working folder to ., so that jinja2 works ok
+    # 2. Files with name ends with jinja2 will be render
     #
     else:
-        for o_name in out_names:
-            o_path = os.path.join(o_base, o_name)
-            # Overwrite existing file by default
-            need_copy = True
-            # If file name startswith !, do NOT overwrite existing file
-            if o_name.startswith('!'):
-                o_name = o_name[1:]
-                o_path = os.path.join(o_base, o_name)
-                if os.path.exists(o_path):
-                    need_copy = False
-            #
-            if need_copy:
-                logger.debug(f'copy {o_name}')
-                # TODO: Merge logic for non-template files, e.g, layout files such as demo.html
-                shutil.copyfile(t_path, o_path)
-                shutil.copymode(t_path, o_path)
-            else:
-                logger.debug(f'skip {o_name}')
-        #
-        # Render file
-        # 1. Change working folder to ., so that jinja2 works ok
-        # 2. Files with name ends with jinja2 will be render
-        #
         o_base = os.path.abspath(o_base)
         with work_in(o_base):
             # Set jinja2's path
@@ -376,5 +362,6 @@ def main(args: List[str]) -> bool:
         help="Specify the seed file name, default value is www. "
              "i.e, -s app means using seed file ./app.seed and models from ./app to generate files to ./app",
     )
+    # TODO: support install/upgrade command
     parsed_args = parser.parse_args(args)
     return _gen(parsed_args.s)

@@ -114,7 +114,7 @@ def get_db(alias=DEFAULT_CONNECTION_NAME, reconnect=False):
     if alias not in _dbs:
         conn = _get_connection(alias)
         conn_settings = _connection_settings[alias]
-        db = conn[conn_settings['name']]  # conn should be an instance of MongoClient, so we need to use db name
+        db = conn[conn_settings['name']]  # conn should be an instance of MongoClient, so we need to use database name to get corresponding database
         _dbs[alias] = db
     #
     return _dbs[alias]
