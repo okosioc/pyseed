@@ -18,7 +18,6 @@ from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, Se
 from bson import ObjectId
 
 from .error import SchemaError, DataError, PathError
-from .utils import parse_layout, iterate_layout
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -361,7 +360,7 @@ class RelationField(ModelField):
         :param back_field_name: The name to use for the relation from the related model back to this one, if it is none, do not create back field in related model
         :param back_field_is_list: If back field is list
         :param back_field_order: If back field is list, use this order when loading and saving
-        :param is_back_field: If its a back field defined in related object
+        :param is_back_field: If is a back field defined in related object
         """
         super().__init__(name, type_, **kwargs)
         # x12
@@ -695,28 +694,6 @@ class BaseModel(metaclass=ModelMeta):
     __icon__ = None
     __title__ = None
     __description__ = None
-    # TODO: Validate all fields in layout are defined
-    # Define fields can be show in query result table or card
-    __columns__ = []
-    # Define field groups, which can be included by index in layouts
-    # e.g,
-    # __groups__ = [
-    #   '''
-    #   name, status
-    #   phone
-    #   ''',
-    #   '''
-    #   password
-    #   ''',
-    # ]
-    # __read__ = '''
-    #   $, (0, 1)
-    # '''
-    __groups__ = []
-    # Define layouts to render read or form page
-    __layout__ = None
-    __read__ = None
-    __form__ = None
 
     def __init__(self, *d: Dict[str, Any], **data: Any) -> None:
         """ Init.
@@ -922,14 +899,14 @@ class BaseModel(metaclass=ModelMeta):
         Note: When an attribute is accessed, __getattribute__ is invoked firstly
         and then if the attribute wasn't found, __getattr__ should be invoked.
         """
-        # Return depends data defined in a field, which can be function to return dynamic data
+        # Return _depends data defined in a field, which can be function to return dynamic data
         if name.endswith('_depends'):
             name = name.split('_depends')[0]
             field = self.__class__.__fields__.get(name)
             if field and field.depends:
                 depends = field.depends
                 if callable(depends):
-                    # check if depends function has arguments
+                    # check if _depends function has arguments
                     if depends.__code__.co_argcount == 0:
                         return depends()
                     else:
@@ -1231,6 +1208,9 @@ class BaseModel(metaclass=ModelMeta):
                     # icon
                     if f_t.icon:
                         field_schema.update({'icon': f_t.icon})
+                    else:
+                        if inner_type and inner_type.__icon__:
+                            field_schema.update({'icon': inner_type.__icon__})
                     # title
                     field_schema.update({'title': f_t.title if f_t.title else f_n.upper()})
                     # description
@@ -1281,33 +1261,22 @@ class BaseModel(metaclass=ModelMeta):
                     'type': 'object',
                     'properties': properties,
                     'requires': requires,
+                    # searchables, [field__comparator|field]
+                    'searchables': [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables],
+                    'searchable_fields': [s[0] for s in searchables],
+                    # sortables, [(field_name, 1/-1)]
+                    'sortables': sortables,
+                    'relations': [k for k in relations.keys() if k != type_.__name__],  # skip self
+                    # id_name & id_type, used for relation inputs
+                    'id_name': type_.__id_name__,
+                    'id_type': type_.__id_type__.__name__ if type_.__id_type__ else None,
+                    #
                     'editable': True,
-                    'columns': type_.__columns__ if type_.__columns__ else requires,  # Using required fields as columns as the default
                     'py_type': type_.__name__,
                     'icon': type_.__icon__ if type_.__icon__ else None,
                     'title': type_.__title__ if type_.__title__ else type_.__name__.upper(),
                     'description': type_.__description__ if type_.__description__ else None,
                 }
-                # layout, if not defined, each field has one row
-                layout = parse_layout(type_.__layout__ if type_.__layout__ else '\n'.join(properties.keys()))[0]
-                obj['layout'] = layout
-                obj['read'] = parse_layout(type_.__read__)[0] if type_.__read__ else layout
-                obj['form'] = parse_layout(type_.__form__)[0] if type_.__form__ else layout
-                obj['groups'] = [parse_layout(g)[0] for g in type_.__groups__]
-                # each column in layout can be blank('')/hyphen(-)/summary($)/group(number)/field(string)/inner fields(has children) suffixed with query and span string
-                # read_fields/form_fields just return valid field names
-                obj['read_fields'] = list(iterate_layout(obj['read'], obj['groups']))
-                obj['form_fields'] = list(iterate_layout(obj['form'], obj['groups']))
-                # searchables, [field__comparator|field]
-                obj['searchables'] = [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables]
-                obj['searchable_fields'] = [s[0] for s in searchables]
-                # sortables, [(field_name, 1/-1)]
-                obj['sortables'] = sortables
-                # relations
-                obj['relations'] = [k for k in relations.keys() if k != type_.__name__]  # skip self
-                # id_name & id_type, used for relation inputs
-                obj['id_name'] = type_.__id_name__
-                obj['id_type'] = type_.__id_type__.__name__ if type_.__id_type__ else None
                 return obj
             elif type_ is str:
                 return {'type': 'string', 'format': Format.TEXT, 'py_type': 'str'}

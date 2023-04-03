@@ -24,7 +24,7 @@ from werkzeug.urls import url_quote, url_encode
 
 from .. import registered_models
 from ..error import TemplateError
-from ..utils import work_in, generate_names, parse_layout
+from ..utils import work_in, generate_names, parse_layout, iterate_layout
 
 logger = logging.getLogger('pyseed')
 
@@ -127,6 +127,14 @@ def _gen(s: str):
     #
     # Parse seed file, which is in yaml format
     # e.g,
+    # models:
+    #   User:
+    #     columns: avatar, name, status, roles, email, phone, create_time
+    #     form: |-
+    #       name
+    #       phone
+    #       intro
+    #       avatar
     # blueprints:
     #   - name: dashboard
     #     views:
@@ -185,16 +193,49 @@ def _gen(s: str):
     #
     logger.info(f'Found {len(models)} registered models: {list(models.keys())}')
     #
+    # Inject layout fields into model schema for each model
+    #
+    logger.info(f'Seed file models:')
+    for md in seed_content['models']:
+        md_name = md['name']
+        logger.info(f'{md_name}')
+        md_schema = models.get(md_name)
+        if not md_schema:
+            logger.warning(f'Skip model layout {md_name} as can NOT find any registered models')
+            continue
+        # Inject columns
+        columns = [f.strip() for f in md.get('columns', '').split(',')]
+        if columns:
+            md_schema['columns'] = columns
+        else:
+            md_schema['columns'] = md_schema['requires']
+        # Inject groups
+        groups = md.get('groups', [])
+        if groups:
+            md_schema['groups'] = [parse_layout(g)[0] for g in groups]
+        # Inject layout
+        layout = md.get('layout', None)
+        md_schema['layout'] = parse_layout(layout if layout else '\n'.join(md_schema['properties'].keys()))[0]
+        # Inject read & form, need to iterate all the keys in md to find the keys starts with read or form
+        md_schema['read'] = md_schema['layout']
+        md_schema['form'] = md_schema['layout']
+        for k in md.keys():
+            if re.match(r'(read|form)\S*', k):
+                md_schema[k] = parse_layout(md[k])[0]
+        # each column in layout can be blank('')/hyphen(-)/summary($)/group(number)/field(string)/inner fields(has children) suffixed with query and span string
+        # read_fields/form_fields just return valid field names
+        md_schema['read_fields'] = list(iterate_layout(md_schema['read'], md_schema['groups']))
+        md_schema['form_fields'] = list(iterate_layout(md_schema['form'], md_schema['groups']))
+    #
     # Create context using seed content
     #
     context = {
         'models': models,  # {name: {names, schema}}}
-        'layouts': [],  # [layout]
         'blueprints': [],  # [blueprint]
         'seeds': [],
     }
     seed_set = set()
-    logger.info(f'Seed file content:')
+    logger.info(f'Seed file blueprints:')
     for bp in seed_content['blueprints']:  # Blueprints
         bp_name = bp['name']
         logger.info(f'{bp_name}/')
@@ -274,7 +315,7 @@ def _recursive_render(t_base, o_base, name, context, env):
         elif key == 'seeds':
             out_key = '__seed'
             # seeds can be accessed at context level, which means it can be used in different views, there is another way to access seed, that is blueprint->view->seed, we often use it generate backend logic
-            # NOTE: do NOTE render the seeds having suffix, e.g, product-read-1, block-read-feature-1
+            # NOTE: do NOT render the seeds having suffix, e.g, product-read-1, block-read-feature-1
             out_values = [s for s in context['seeds'] if not s.get('suffix')]
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'models':
@@ -342,7 +383,6 @@ def _recursive_render(t_base, o_base, name, context, env):
         #    www/templates/seeds/User-form.html.jinja2
         #    www/templates/seeds/Project-read.html.jinja2
         #    ...
-        #
         #  2. Files that is just a jinja, no need to overwrite just render directly; The jinja file should NOT be removed after generation
         #  www/static/js/enums.js.jinja2
         for o_name in out_names:

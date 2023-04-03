@@ -159,25 +159,6 @@ def test_model():
     assert 'ip' in schema['properties']['last_login']['properties']
     assert 'ip' in schema['properties']['logins']['items']['properties']
     assert 'title' in schema['properties']['posts']['items']['properties']
-    # Layout
-    assert len(schema['columns']) == len(User.__columns__)
-    assert len(schema['layout']) == 6
-    assert schema['layout'][0][0]['name'] == 'avatar'  # row 0, column 0
-    assert schema['layout'][2][0]['name'] == 'password'  # row 2, column 0
-    assert schema['layout'][2][1]['name'] == ''  # row 2, column 1, emtry column
-    assert schema['layout'][3][1]['name'] == 'status+roles'  # row 3, column 1
-    assert schema['layout'][3][1]['name_snake'] == 'status_roles'
-    assert schema['layout'][3][1]['span'] == 8
-    assert schema['layout'][3][1]['children'][0]['name'] == 'status'  # row 2, column 1, children 0
-    assert schema['layout'][5][0]['name'] == '$'  # row 4, column 0
-    assert schema['layout'][5][0]['span'] == 4
-    assert schema['layout'][5][1]['name'] == 'last_login+posts'  # row 4, column 1
-    assert schema['layout'][5][1]['name_kebab'] == 'last-login-posts'
-    assert schema['layout'][5][1]['span'] == 8
-    assert schema['layout'][5][1]['children'][0]['params']['is_x']  # row 2, column 1, children 0
-    assert schema['layout'][5][1]['children'][1]['name'] == 'posts'  # row 2, column 1, children 1
-    assert schema['layout'][5][1]['children'][1]['span'] == 6
-    assert len(schema['groups'][0]) == 3
     assert schema['searchables'] == ['name__like', 'status']
     # Relation schema
     assert schema['relations'] == ['Team']
@@ -190,7 +171,6 @@ def test_model():
     assert team_schema['properties']['members']['type'] == 'array'
     assert team_schema['properties']['members']['is_back_relation']
     assert 'email' in team_schema['properties']['members']['items']['properties']
-    assert team_schema['read_fields'] == ['logo', 'name', 'phone', 'remarks', 'managers']
     assert team_schema['searchable_fields'] == ['name']
     #
     # Test access
