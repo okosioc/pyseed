@@ -92,13 +92,13 @@ def parse_layout(body, models={}):
       user-summary, user.timeline-read
     """
     # Returns
-    # Rows are [column], while column should be {name:str, params:{}, span:int, children:[column], model:{name:str, schema:{}}}
+    # Rows are [column], column should be {name:str, params:{}, span:int, children:[column], model:{name:str, schema:{}}}, name and params are required
     rows, seeds = [], []
 
     # Match span
     span_regex = re.compile(r'^(.*)#([0-9]+)$')
     # Match bracket
-    bracke_regex = re.compile(r'^[\(](.*)[\)](.*)')
+    bracke_regex = re.compile(r'^\((.*)\)(.*)')
     # Use a negative lookahead to match all the commas which are not inside the parenthesis
     comma_regex = re.compile(r',\s*(?![^()]*\))')
 
@@ -170,8 +170,11 @@ def parse_layout(body, models={}):
                     ret.update({'model': found, 'sub': sub, 'action': action, 'suffix': suffix})
                     # Append to return seeds
                     seeds.append(ret)
-        # Names
-        ret.update(generate_names(column_str))
+        # Names, if models is specified, means it is parsing layout for view, need to generate names for each seed
+        if models:
+            ret.update(generate_names(column_str))
+        else:
+            ret.update({'name': column_str})
         # Params
         params = {}
         if query_str:

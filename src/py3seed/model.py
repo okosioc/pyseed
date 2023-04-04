@@ -1119,7 +1119,7 @@ class BaseModel(metaclass=ModelMeta):
         return []
 
     @classmethod
-    def schema(cls):
+    def schema(cls, layouts={}):
         """ To json schema dict.
 
         NOTE:
@@ -1130,11 +1130,10 @@ class BaseModel(metaclass=ModelMeta):
 
         However, we still have some grammars, e.g,
           - add type date
-          - add enum_titles, py_type, layout, form, read, icon, editable to help code generation
+          - add enum_titles, py_type, icon, editable to help code generation
           - add format to array, so that we can gen a component for the whole array
           - add searchables to object, so that it can be used to generate search form
           - add sortables to object, so that it can be used to generate order drowpdown
-          - add columns to object, so that it can be used to generate columns for table
         """
 
         def _gen_schema(type_: Type, parents=[]):
@@ -1209,8 +1208,8 @@ class BaseModel(metaclass=ModelMeta):
                     if f_t.icon:
                         field_schema.update({'icon': f_t.icon})
                     else:
-                        if inner_type and inner_type.__icon__:
-                            field_schema.update({'icon': inner_type.__icon__})
+                        if inner_type and 'icon' in inner_type:
+                            field_schema.update({'icon': inner_type['icon']})
                     # title
                     field_schema.update({'title': f_t.title if f_t.title else f_n.upper()})
                     # description
@@ -1261,6 +1260,11 @@ class BaseModel(metaclass=ModelMeta):
                     'type': 'object',
                     'properties': properties,
                     'requires': requires,
+                    'editable': True,
+                    'py_type': type_.__name__,
+                    'icon': type_.__icon__ if type_.__icon__ else None,
+                    'title': type_.__title__ if type_.__title__ else type_.__name__.upper(),
+                    'description': type_.__description__ if type_.__description__ else None,
                     # searchables, [field__comparator|field]
                     'searchables': [('{}__{}'.format(*s) if s[1] != Comparator.EQ else s[0]) for s in searchables],
                     'searchable_fields': [s[0] for s in searchables],
@@ -1270,13 +1274,20 @@ class BaseModel(metaclass=ModelMeta):
                     # id_name & id_type, used for relation inputs
                     'id_name': type_.__id_name__,
                     'id_type': type_.__id_type__.__name__ if type_.__id_type__ else None,
-                    #
-                    'editable': True,
-                    'py_type': type_.__name__,
-                    'icon': type_.__icon__ if type_.__icon__ else None,
-                    'title': type_.__title__ if type_.__title__ else type_.__name__.upper(),
-                    'description': type_.__description__ if type_.__description__ else None,
                 }
+                # Inject layouts into schema
+                if layouts:
+                    layout = layouts.get(type_.__name__, {})
+                    if not layout.get('columns'):
+                        layout['columns'] = obj['requires']
+                    if not layout.get('read'):
+                        # Each field is a row
+                        layout['read'] = [[{'name': f, 'params': {}}] for f in obj['properties'].keys()]
+                    if not layout.get('form'):
+                        layout['form'] = layout['read']
+                    #
+                    obj.update(layout)
+                #
                 return obj
             elif type_ is str:
                 return {'type': 'string', 'format': Format.TEXT, 'py_type': 'str'}

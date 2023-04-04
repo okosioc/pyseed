@@ -10,6 +10,7 @@
 """
 import argparse
 import importlib.util
+import inspect
 import logging
 import os
 import re
@@ -22,7 +23,7 @@ from flask import request
 from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader
 from werkzeug.urls import url_quote, url_encode
 
-from .. import registered_models
+from .. import registered_models, BaseModel
 from ..error import TemplateError
 from ..utils import work_in, generate_names, parse_layout, iterate_layout
 
@@ -101,9 +102,18 @@ def _prepare_jinja2_env():
         # If no matching, return nothing
         return None
 
+    def parse_layout_fields(schema, action):
+        """ Parse layout fields.
+
+        each column in layout can be blank('')/hyphen(-)/summary($)/group(number)/field(string)/inner fields(has children) suffixed with query and span string
+        this function will return a list of field names.
+        """
+        return list(iterate_layout(schema[action], schema['groups']))
+
     env.globals['update_query'] = update_query
     env.globals['new_model'] = new_model
     env.globals['match_field'] = match_field
+    env.globals['parse_layout_fields'] = parse_layout_fields
     #
     return env
 
@@ -175,57 +185,43 @@ def _gen(s: str):
         logger.error(f'Can not find any valid pyseed includes')
         return False
     #
-    # Import models package
+    # Load all model's schema
     # 1. Find all the models definition in models package, please import all models in __init__.py
+    # 2. Load model layouts from seed file
+    # 3. Inject layouts to model schema
     #
-    module_name = os.path.basename(output_path)
-    module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(output_path, '__init__.py'))
+    models, model_layouts = {}, {}
+    module_name = 'models'
+    module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(output_path, module_name, '__init__.py'))
     module = importlib.util.module_from_spec(module_spec)
     sys.modules[module_name] = module
     module_spec.loader.exec_module(module)
-    #
-    # Load registered model schemas
-    #
-    models = {}
-    for m in registered_models:
-        logger.debug(f'Load model {m.__name__} with relations {list(m.__relations__.keys())}')
-        models[m.__name__] = {'schema': m.schema(), **generate_names(m.__name__)}
-    #
-    logger.info(f'Found {len(models)} registered models: {list(models.keys())}')
-    #
-    # Inject layout fields into model schema for each model
-    #
-    logger.info(f'Seed file models:')
-    for md in seed_content['models']:
-        md_name = md['name']
-        logger.info(f'{md_name}')
-        md_schema = models.get(md_name)
-        if not md_schema:
-            logger.warning(f'Skip model layout {md_name} as can NOT find any registered models')
-            continue
-        # Inject columns
-        columns = [f.strip() for f in md.get('columns', '').split(',')]
-        if columns:
-            md_schema['columns'] = columns
-        else:
-            md_schema['columns'] = md_schema['requires']
-        # Inject groups
-        groups = md.get('groups', [])
-        if groups:
-            md_schema['groups'] = [parse_layout(g)[0] for g in groups]
-        # Inject layout
-        layout = md.get('layout', None)
-        md_schema['layout'] = parse_layout(layout if layout else '\n'.join(md_schema['properties'].keys()))[0]
-        # Inject read & form, need to iterate all the keys in md to find the keys starts with read or form
-        md_schema['read'] = md_schema['layout']
-        md_schema['form'] = md_schema['layout']
-        for k in md.keys():
-            if re.match(r'(read|form)\S*', k):
-                md_schema[k] = parse_layout(md[k])[0]
-        # each column in layout can be blank('')/hyphen(-)/summary($)/group(number)/field(string)/inner fields(has children) suffixed with query and span string
-        # read_fields/form_fields just return valid field names
-        md_schema['read_fields'] = list(iterate_layout(md_schema['read'], md_schema['groups']))
-        md_schema['form_fields'] = list(iterate_layout(md_schema['form'], md_schema['groups']))
+    logger.info(f'Load models:')
+    for attr in dir(module):
+        attribute = getattr(module, attr)
+        if inspect.isclass(attribute) and issubclass(attribute, BaseModel):
+            logger.debug(f'  {attribute.__name__} with relations {list(attribute.__relations__.keys())}')
+            # Layouts from seed file
+            md = next((md for md in seed_content['models'] if md['name'] == attribute.__name__), {})
+            md_layout = {
+                'columns': [f.strip() for f in md.get('columns').split(',')] if 'columns' in md else None,
+                'groups': [],
+                'read': [],
+                'form': [],
+            }
+            for k in md.keys():
+                m = re.match(r'(group|read|form)\S*', k)
+                if m:
+                    md_layout[k] = parse_layout(md[k])[0]
+                    # groups can be access by index in read/form layout, e.g, 0 means the first group
+                    if m.group(1) == 'group':
+                        md_layout['groups'].append(md_layout[k])
+            # Keep class for further processing
+            models[attribute.__name__] = attribute
+            model_layouts[attribute.__name__] = md_layout
+    # Inject layouts to model schema
+    for md_name, md_class in models.items():
+        models[md_name] = {'schema': md_class.schema(layouts=model_layouts), **generate_names(md_name)}
     #
     # Create context using seed content
     #

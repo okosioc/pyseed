@@ -64,22 +64,8 @@ class Team(MongoModel):
     #
     update_time: datetime = None
     create_time: datetime = datetime.now
-    __groups__ = [
-        '''
-        logo
-        name, phone
-        remarks
-        ''',
-        '''
-        managers
-        '''
-    ]
-    __read__ = '''
-    $, (0, 1)
-    '''
-    __form__ = '''
-    0#4, 1#8
-    '''
+    #
+    __icon__ = 'users'
 
 
 def evens():
@@ -118,22 +104,6 @@ class User(MongoModel):
     update_time: datetime = None
     create_time: datetime = datetime.now
 
-    __columns__ = ['avatar', 'name', 'email', 'status', 'create_time']
-    __groups__ = [
-        '''
-        name, email
-        intro
-        avatar
-        ''',
-    ]
-    __layout__ = '''
-    avatar
-    name, email
-    password,
-    point#4, (status, roles)#8
-    -
-    $#4, (last_login?is_x=true#6, posts#6)?is_y=true#8
-    '''
     __indexes__ = [{'fields': ['email'], 'unique': True}]
 
 
@@ -160,6 +130,8 @@ def test_model():
     assert 'ip' in schema['properties']['logins']['items']['properties']
     assert 'title' in schema['properties']['posts']['items']['properties']
     assert schema['searchables'] == ['name__like', 'status']
+    #
+    assert schema['properties']['team']['icon'] == 'users'
     # Relation schema
     assert schema['relations'] == ['Team']
     assert 'is_out_relation' not in schema['properties']['sibling']
