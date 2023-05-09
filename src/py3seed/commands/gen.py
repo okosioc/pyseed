@@ -311,7 +311,7 @@ def _recursive_render(t_base, o_base, name, context, env):
         elif key == 'seeds':
             out_key = '__seed'
             # seeds can be accessed at context level, which means it can be used in different views, there is another way to access seed, that is blueprint->view->seed, we often use it generate backend logic
-            # NOTE: do NOT render the seeds having suffix, e.g, product-read-1, block-read-feature-1
+            # NOTE: do NOT render the seeds having alphanumeric suffix, e.g, Block-read-features-basic, Block-read-shop-products-grid
             out_values = [s for s in context['seeds'] if not s.get('suffix')]
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'models':

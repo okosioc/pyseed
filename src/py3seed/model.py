@@ -139,6 +139,7 @@ class Format(SimpleEnum):
     LINK = 'link'  # Text input with an extenral link
     TIME = 'time'  # Time picker
     METRIC = 'metric'  # Statistic card for simple or object
+    RANGE = 'range'  # Range picker
     # Below values are used for inner model/dict or list of model/dict
     TAB = 'tab'  # Objects with tabs nav, i.e, [{}]
     TABLE = 'table'  # Objects in table, i.e, [{}]
@@ -1236,7 +1237,7 @@ class BaseModel(metaclass=ModelMeta):
                     # sortable
                     if f_t.sortable is True:
                         sortables.append(f_n)
-                    # depends, only update it to true, the you can access it by {field_name}_depends in page rendering or biz logic
+                    # depends, only update it to true, then you can access it by {field_name}_depends in page rendering or biz logic
                     if f_t.depends:
                         field_schema.update({'depends': True})
                     # relation
