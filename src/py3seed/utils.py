@@ -16,8 +16,12 @@ import os
 import re
 import shutil
 import stat
+import logging
 
+from .error import LayoutError
 import inflection
+
+logger = logging.getLogger('pyseed')
 
 
 def force_delete(func, path, exc_info):
@@ -77,7 +81,245 @@ def generate_names(name):
         }
 
 
-def parse_layout(body, models={}):
+# Match span
+SPAN_REGEX = re.compile(r'^(.*)#([0-9]+)$')
+
+
+def parse_layout(body, schema):
+    """ Parse layout defined in a model action.
+    e.g,
+    'demo/user-profile': {              # action name
+        'domains': ['www'],             # domains that this action is available
+        'layout': '''#!form?param=1     # first line is action line defining action type and params, i.e, query, read, read_by_key, form
+            $#4,           0#8
+              avatar         name
+              name           phone
+              status         intro
+              roles          avatar
+              email
+              phone
+              create_time
+        ''',
+    }
+    Return {action, params, rows}
+    e.g,
+    {
+        action: form
+        params: {
+            param: 1,
+        },
+        rows: [                         # each column is a dict, which has name/params/span and inner rows
+            {name: $, rows:[...]},
+            {name: 0, rows:[...]},
+        ]
+    }
+    """
+
+    def _parse_lines(level, _lines, _schema):
+        """ Recursively parse lines. """
+        # logger.debug('Parse lines:\n' + '\n'.join(_lines))
+        _rows = []
+        # Get the indexes of lines that has same indent with first line
+        first_line = _lines[0]
+        first_indent = len(first_line) - len(first_line.lstrip())
+        indexes = []
+        for index in range(len(_lines)):
+            line = _lines[index]
+            indent = len(line) - len(line.lstrip())
+            if indent == first_indent:
+                indexes.append(index)
+            elif indent < first_indent:
+                raise LayoutError(f'Invalid indent {indent} < {first_indent}: ' + line.replace(" ", "."))
+            else:
+                diff = first_indent - indent
+                if diff % 2 != 0:
+                    raise LayoutError(f'Invalid indent {indent} - {first_indent} is odd: ' + line.replace(" ", "."))
+        # Parse each segment
+        for i in range(0, len(indexes)):
+            index = indexes[i]
+            segment = _lines[index: indexes[i + 1]] if i < len(indexes) - 1 else _lines[index:]
+            # Remove the indent of each line
+            segment = [l[first_indent:] for l in segment]
+            # Parse segment, first line is fields seperated by comma and the rest are layout of each field
+            index_line = segment[0]
+            columns = [_parse_column(c) for c in index_line.split(',')]
+            # Validate inddex line, while inner layout will be validated recursively
+            for column in columns:
+                col_name = column['name']
+                # Blank column
+                if not col_name:
+                    pass
+                # Hyphen column
+                elif col_name == '-':
+                    pass
+                # Summary column
+                elif col_name == '$':
+                    pass
+                # Group column
+                elif col_name.isdigit():
+                    pass
+                else:
+                    keys = _schema['properties'].keys()  # type of _schema is always a object
+                    if col_name not in keys:
+                        raise LayoutError(f'Field {col_name} not found in schema')
+            # Has inner layout
+            if len(segment) > 1:
+                logger.debug(f'Parsing level {level} segment:\n' + '\n'.join(segment))
+                body_lines = segment[1:]
+                # Inject layout for each column
+                for j in range(0, len(columns)):
+                    column = columns[j]
+                    col_name = column['name']
+                    start_position = index_line.index(column['raw'])
+                    if j < len(columns) - 1:
+                        end_position = index_line.index(columns[j + 1]['name'])
+                        col_lines = [l[start_position:end_position] for l in body_lines]
+                    else:
+                        col_lines = [l[start_position:] for l in body_lines]
+                    # Remove empty lines
+                    col_lines = [l for l in col_lines if l.strip()]
+                    if not col_lines:  # some column may have not inner layout, e.g, blank column/simple field
+                        continue
+                    #
+                    logger.debug(f'Column {i}, {j}: {col_name}\n' + '\n'.join(col_lines))
+                    #
+                    # Column name possible values:
+                    # 1) blank column prints only a placeholder
+                    # 2) hyphen(-) prints line separator, i.e, <hr/>
+                    # 3) group column(digit) combines multiple columns
+                    # 4) summary column($) prints model's summary
+                    #
+                    # While schema is a subset of Object Schema from OAS 3.0,
+                    # In order to keep all the things simple, we do not use complex keywords such as oneOf, patternProperties, additionalProperties, etc.
+                    # - https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#schemaObject
+                    # - https://swagger.io/docs/specification/data-models/
+                    # e.g,
+                    # _schema = {
+                    #     type: object,
+                    #     properties: {
+                    #         name: {type: string},
+                    #         avatar: {type: string, format: image},
+                    #         status: {type: string, enum: [normal, rejected]},
+                    #         team: {
+                    #             type: object,
+                    #             properties: {
+                    #                 name: {type: string},
+                    #                 ...
+                    #             }
+                    #         },
+                    #         logins: {
+                    #             type: array,
+                    #             items: {
+                    #                 type: object,
+                    #                 properties: {
+                    #                     ip: {type: string},
+                    #                     time: {type: string, format: date-time}
+                    #                 }
+                    #             }
+                    #         },
+                    #     }
+                    # }
+                    # Blank column
+                    if not col_name:
+                        pass
+                    # Hyphen column
+                    elif col_name == '-':
+                        pass
+                    # Summary column
+                    elif col_name == '$':
+                        column['rows'] = _parse_lines(level + 1, col_lines, _schema)
+                    # Group column
+                    elif col_name.isdigit():
+                        column['rows'] = _parse_lines(level + 1, col_lines, _schema)
+                    else:
+                        inner_schema = _schema['properties'][col_name]
+                        inner_type = inner_schema['type']
+                        if inner_type in ['object', 'array']:
+                            if not col_lines:
+                                raise LayoutError(f'Field {col_name} should have layout')
+                            # Schema passing recursively should always be object
+                            column['rows'] = _parse_lines(level + 1, col_lines, inner_schema if inner_type == 'object' else inner_schema['items'])
+                        else:
+                            raise LayoutError(f'{inner_type.capitalize()} field {col_name} can not have inner layout')
+            #
+            _rows.append(columns)
+        #
+        return _rows
+
+    def _parse_column(column_str):
+        """ Parse column string, having params and span, e.g, a?param=1#4. """
+        column_str = column_str.strip()
+        ret = {
+            'raw': column_str,
+        }
+        # Parse span at the end, e.g, a?param=1#4
+        span_match = SPAN_REGEX.match(column_str)
+        if span_match:
+            column_str = span_match.group(1)
+            ret.update({'span': int(span_match.group(2))})
+        # Parse params, e.g, a?param=1#4
+        if '?' in column_str:
+            column_str, params = _parse_query_str(column_str)
+            ret.update({'params': params})
+        #
+        ret.update({'name': column_str})
+        #
+        return ret
+
+    def _parse_query_str(_query_str):
+        """ Parse query string. """
+        _path, _query_str = _query_str.split('?')
+        _params = {}
+        for p in _query_str.split('&'):
+            _key, _value = p.split('=')
+            #
+            _key = _key.lower()
+            _value = _value.strip()
+            if _key.startswith('has_') or _key.startswith('is_'):
+                if _value.lower() in ['1', 'true', 'yes']:
+                    _value = True
+                else:
+                    _value = False
+            elif _value.startswith('[') or _value.startswith('{'):
+                try:
+                    _value = json.loads(_value)  # Need to use double quotes for string values or key names
+                except ValueError as e:
+                    pass
+            #
+            _params[_key] = _value
+        #
+        return _path, _params
+
+    # Return {action, params, rows}
+    # Default action is read
+    action = 'read'
+    params = {}
+    # Remove empty lines and remove trailing spaces for each line
+    lines = body.splitlines()
+    lines = [l.rstrip() for l in lines if l.strip()]
+    if not lines:
+        logger.error('Layout can NOT be empty')
+        return None
+    # Parse action line
+    action_line = lines[0]
+    # If it is action line, parse action and params
+    if action_line.startswith('#!'):
+        action_str = action_line[2:].strip()
+        lines = lines[1:]
+        # Parse params, e.g, form?param=1
+        if '?' in action_str:
+            action, params = _parse_query_str(action_str)
+    #
+    rows = _parse_lines(0, lines, schema)
+    #
+    return {
+        'action': action,
+        'params': params,
+        'rows': rows
+    }
+
+
+def parse_layout1(body, models=None):
     """ Parse layout defined in model.__layout__ or seed file's view layout
 
     body is a multiline string:

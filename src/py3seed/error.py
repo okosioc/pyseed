@@ -43,3 +43,8 @@ class DatabaseError(SeedError):
 class TemplateError(SeedError):
     """ Template error. """
     pass
+
+
+class LayoutError(SeedError):
+    """ Layout error. """
+    pass

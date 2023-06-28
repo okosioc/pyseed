@@ -24,8 +24,8 @@ from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader
 from werkzeug.urls import url_quote, url_encode
 
 from .. import registered_models, BaseModel
-from ..error import TemplateError
-from ..utils import work_in, generate_names, parse_layout, iterate_layout
+from ..error import TemplateError, LayoutError
+from ..utils import work_in, generate_names, parse_layout1, iterate_layout
 
 logger = logging.getLogger('pyseed')
 
@@ -187,10 +187,8 @@ def _gen(s: str):
     #
     # Load all model's schema
     # 1. Find all the models definition in models package, please import all models in __init__.py
-    # 2. Load model layouts from seed file
-    # 3. Inject layouts to model schema
     #
-    models, model_layouts = {}, {}
+    models = {}
     module_name = 'models'
     module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(output_path, module_name, '__init__.py'))
     module = importlib.util.module_from_spec(module_spec)
@@ -201,36 +199,18 @@ def _gen(s: str):
         attribute = getattr(module, attr)
         if inspect.isclass(attribute) and issubclass(attribute, BaseModel):
             logger.debug(f'  {attribute.__name__} with relations {list(attribute.__relations__.keys())}')
-            # Layouts from seed file
-            md = next((md for md in seed_content['models'] if md['name'] == attribute.__name__), {})
-            md_layout = {
-                'columns': [f.strip() for f in md.get('columns').split(',')] if 'columns' in md else None,
-                'groups': [],
-                'read': [],
-                'form': [],
-            }
-            for k in md.keys():
-                m = re.match(r'(group|read|form)\S*', k)
-                if m:
-                    md_layout[k] = parse_layout(md[k])[0]
-                    # groups can be access by index in read/form layout, e.g, 0 means the first group
-                    if m.group(1) == 'group':
-                        md_layout['groups'].append(md_layout[k])
-            # Keep class for further processing
             models[attribute.__name__] = attribute
-            model_layouts[attribute.__name__] = md_layout
     # Inject layouts to model schema
     for md_name, md_class in models.items():
-        models[md_name] = {'schema': md_class.schema(layouts=model_layouts), **generate_names(md_name)}
+        models[md_name] = {'schema': md_class.schema(), **generate_names(md_name)}
     #
     # Create context using seed content
     #
     context = {
         'models': models,  # {name: {names, schema}}}
+        'seeds': {},  # {name: {model, params, layout}}
         'blueprints': [],  # [blueprint]
-        'seeds': [],
     }
-    seed_set = set()
     logger.info(f'Seed file blueprints:')
     for bp in seed_content['blueprints']:  # Blueprints
         bp_name = bp['name']
@@ -240,7 +220,7 @@ def _gen(s: str):
         for v in bp['views']:  # Views
             v_name = v['name']
             logger.info(f'  {v_name}/')
-            rows, seeds = parse_layout(v['layout'], models)
+            rows, seeds = parse_layout1(v['layout'], models)
             for r in rows:
                 rs = ', '.join(map(lambda x: x['name'], r))
                 logger.info(f'    {rs}')
@@ -248,10 +228,10 @@ def _gen(s: str):
             view = {'blueprint': blueprint, 'rows': rows, 'seeds': seeds, 'params': v.get('params', {}), **generate_names(v_name)}
             for seed in seeds:
                 seed_name = seed['name']
-                # Remove dulplicated seed at context level
-                if seed_name not in seed_set:
-                    context['seeds'].append(seed)
-                    seed_set.add(seed_name)
+                # Check dulplicated seed name
+                if seed_name in context['seeds']:
+                    logger.error(f'Found dulplicate seed with name {seed_name}')
+                    return False
                 # Remove dulplicated model at blueprint level
                 seed_model = seed['model']
                 models_by_name[seed_model['name']] = seed_model

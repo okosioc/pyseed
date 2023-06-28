@@ -11,7 +11,7 @@
 
 import importlib_metadata
 
-from .error import SeedError, SchemaError, DataError, DatabaseError, PathError
+from .error import SeedError, SchemaError, DataError, DatabaseError, PathError, LayoutError, TemplateError
 from .model import SimpleEnumMeta, SimpleEnum, Format, Comparator, Ownership, DATETIME_FORMAT, ModelJSONEncoder, \
     ModelField, RelationField, BaseModel
 from .admin import register, registered_models

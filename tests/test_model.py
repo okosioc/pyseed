@@ -78,6 +78,7 @@ class User(MongoModel):
     name: str = ModelField(searchable=Comparator.LIKE)
     email: str
     password: str = None
+    phone: str = None
     intro: str = None
     avatar: str = None
     point: int = ModelField(editable=False, default=0)

@@ -1,0 +1,94 @@
+# -*- coding: utf-8 -*-
+"""
+    test_gen
+    ~~~~~~~~~~~~~~
+
+    Gen test cases.
+
+    :copyright: (c) 2023 by weiminfeng.
+    :date: 2023/5/29
+"""
+import pytest
+
+from py3seed import LayoutError
+from py3seed.utils import parse_layout
+from .test_model import User, Team
+
+
+def test_layout_parsing():
+    """ Test layout parsing. """
+    # User profile
+    user_profile_layout = '''#!form?title=User
+        $#4,           0#8                                           
+          avatar         name  
+          name           phone                                                  
+          status         intro                                                 
+          roles          avatar                                                
+          email
+          phone
+          create_time
+    '''
+    user_schema = User.schema()
+    # Team members
+    team_members_layout = '''#!read?title=Members
+        $#4,           members#8                                                  
+          logo           avatar, name, status, roles, email, phone, team_join_time
+          name
+          phone                                                              
+          members                                                                 
+          create_time
+    '''
+    team_schema = Team.schema()
+
+    #
+    # Validation
+    #
+
+    # Validate invalid indent
+    with pytest.raises(LayoutError) as exc_info:
+        parse_layout(
+            user_profile_layout.replace('status', ' status'),
+            user_schema,
+        )
+    #
+    assert 'indent' in str(exc_info.value)
+    # Validate invalid field name
+    with pytest.raises(LayoutError) as exc_info:
+        parse_layout(
+            user_profile_layout.replace('create_time', 'creat_time'),
+            user_schema,
+        )
+    #
+    assert 'creat_time not found' in str(exc_info.value)
+    # Validate simple field that having inner layout
+    with pytest.raises(LayoutError) as exc_info:
+        parse_layout(
+            user_profile_layout.replace('intro', '  intro'),
+            user_schema,
+        )
+    #
+    assert 'phone can not have inner layout' in str(exc_info.value)
+
+    #
+    # Parsing
+    #
+
+    # User profile layout
+    layout = parse_layout(user_profile_layout, user_schema)
+    assert layout['action'] == 'form'
+    assert layout['params']['title'] == 'User'
+    assert len(layout['rows']) == 1
+    first_row = layout['rows'][0]
+    assert first_row[0]['name'] == '$'
+    assert first_row[0]['span'] == 4
+    assert len(first_row[0]['rows']) == 7
+    assert first_row[0]['rows'][0][0]['name'] == 'avatar'
+    assert len(first_row[1]['rows']) == 4
+    assert first_row[1]['rows'][1][0]['name'] == 'phone'
+
+    # Team member layout
+    layout = parse_layout(team_members_layout, team_schema)
+    assert layout['action'] == 'read'
+    first_row = layout['rows'][0]
+    assert len(first_row[1]['rows'][0]) == 7
+    assert first_row[1]['rows'][0][0]['name'] == 'avatar'

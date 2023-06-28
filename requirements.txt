@@ -2,4 +2,3 @@ flask
 pymongo
 inflection
 pyyaml
-pytest
