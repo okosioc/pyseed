@@ -1,0 +1,21 @@
+""" {{ blueprint.name }} module. """
+from datetime import datetime
+
+from bson import ObjectId
+from flask import Blueprint, render_template, current_app, redirect, request, abort, jsonify, url_for
+from flask_login import current_user
+
+from py3seed import populate_model, populate_search
+{% for view in blueprint.views %}
+from tests.core.models import {{ view.model.name }}
+{% endfor %}
+
+{{ blueprint.name_snake }} = Blueprint('{{ blueprint.name_snake }}', __name__)
+
+
+{% for view in blueprint.views %}
+@{{ blueprint.name_snake }}.route('/{{ view.name }}')
+def {{ view.name_snake }}():
+    """ {{ view.params.title }}. """
+    pass
+{% endfor %}

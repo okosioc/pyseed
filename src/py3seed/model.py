@@ -18,6 +18,7 @@ from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, Se
 from bson import ObjectId
 
 from .error import SchemaError, DataError, PathError
+from .utils import parse_layout
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -695,6 +696,22 @@ class BaseModel(metaclass=ModelMeta):
     __icon__ = None
     __title__ = None
     __description__ = None
+    # Views for this model, should be a dict
+    # i.e,
+    # {
+    #   view_name: {                    # View name should be unique, in blueprint/view format, if blueprint is not specified, use default public by default
+    #     domains: ['www'],             # Domains that this view can be generated, should always be application's name
+    #     layout: '''action?param=1     # Layout of this view, we use this layout to generate corresponding view and template source code
+    #       field_string, field_select
+    #       field_image
+    #       field_object
+    #         field_string
+    #       field_textarea
+    #     ''',
+    #   },
+    #   ...
+    # }
+    __views__ = {}
 
     def __init__(self, *d: Dict[str, Any], **data: Any) -> None:
         """ Init.

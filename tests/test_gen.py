@@ -8,11 +8,14 @@
     :copyright: (c) 2023 by weiminfeng.
     :date: 2023/5/29
 """
+import os
+
 import pytest
 
 from py3seed import LayoutError
 from py3seed.utils import parse_layout
-from .test_model import User, Team
+from py3seed.commands.gen import _gen
+from .core.models import User, Team
 
 
 def test_layout_parsing():
@@ -92,3 +95,9 @@ def test_layout_parsing():
     first_row = layout['rows'][0]
     assert len(first_row[1]['rows'][0]) == 7
     assert first_row[1]['rows'][0][0]['name'] == 'avatar'
+
+
+def test_gen():
+    """ Test Generation. """
+    os.chdir('tests')
+    _gen(None, None)

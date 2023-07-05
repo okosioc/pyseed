@@ -13,7 +13,7 @@ import pytest
 from pymongo.errors import DuplicateKeyError
 
 from py3seed import DataError, populate_model
-from .test_model import User, Team
+from .core.models import User, Team
 
 
 def test_crud(db):

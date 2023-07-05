@@ -25,7 +25,7 @@ from werkzeug.urls import url_quote, url_encode
 
 from .. import registered_models, BaseModel
 from ..error import TemplateError, LayoutError
-from ..utils import work_in, generate_names, parse_layout1, iterate_layout
+from ..utils import work_in, generate_names, parse_layout1, iterate_layout, parse_layout
 
 logger = logging.getLogger('pyseed')
 
@@ -88,9 +88,8 @@ def _prepare_jinja2_env():
 
     def match_field(fields, matcher):
         """ Get the first matching field from columns.
-
-        :param fields - list of field name
-        :param matcher - name|title|\w+_name
+        e.g,
+        - match_field(columns, 'name|title|\\w+_name')
         """
         matcher = re.compile(matcher if matcher.startswith('(') else f'({matcher})')
         if isinstance(fields, dict):
@@ -118,79 +117,25 @@ def _prepare_jinja2_env():
     return env
 
 
-def _gen(s: str):
+def _gen(ms: str, ds: str):
     """ Gen. """
-    logger.info(f'Gen using {s}')
-    # Seed file name has seed ext
-    seed_file = f'{s}.sd'
-    if not os.path.exists(seed_file):
-        logger.error(f'Can not find seed file {seed_file}')
-        return False
-    # Out dir should be same with seed
-    # e.g,
-    #   www.sd -> www
-    #   miniapp.sd -> miniapp
-    output_path = s
-    if not os.path.exists(output_path):
-        logger.error(f'Can not find output path {output_path}')
-        return False
-    #
-    # Parse seed file, which is in yaml format
-    # e.g,
-    # models:
-    #   User:
-    #     columns: avatar, name, status, roles, email, phone, create_time
-    #     form: |-
-    #       name
-    #       phone
-    #       intro
-    #       avatar
-    # blueprints:
-    #   - name: dashboard
-    #     views:
-    #       - name: profile
-    #         params: {extends: cust}
-    #         layout: |-
-    #           user.info, user.security
-    #
-    with open(seed_file) as stream:
-        try:
-            seed_content = yaml.safe_load(stream)
-        except yaml.YAMLError as e:
-            logger.error(f'Can not parse seed file {seed_file}, {e}')
+    logger.info(f'Gen for domain(s) {ms} under domain(s) {ds}')
+    include_models = [m.strip() for m in ms.split(',')] if ms else []
+    include_domains = [d.strip() for d in ds.split(',')] if ds else []
+    # Domains should be project folders, i.e, [www, miniapp, android, ios, ...]
+    for d in include_domains:
+        if not os.path.exists(d):
+            logger.error(f'Can not find domain {d}')
             return False
     #
-    # Parse .pyseed-includes in current folder.
-    # e.g,
-    #   www/static/assets
-    #   www/static/js/enums.js.jinja2
-    #   www/templates/seeds/{{#seeds}}.html.jinja2
-    #   www/templates/{{#blueprints}}
-    #   www/views/{{#blueprints}}.stub.py.jinja2
+    # Load all model's schema and views
+    # 1. Find all the models definition in core.models package, please import all models in __init__.py
+    # 2. Load each models' schema and views, filtering models and views that needs to be generated
     #
-    includes_file = '.pyseed-includes'
-    includes = []
-    logger.debug('pyseed includes:')
-    with open(includes_file) as file:
-        for line in file:
-            line = line.strip()
-            # skip comments and blank lines
-            if line.startswith('#') or len(line) == 0:
-                continue
-            # only process the folders or files under output path
-            if line.startswith(output_path):
-                includes.append(line)
-                logger.debug('  ' + line)
-    if not includes:
-        logger.error(f'Can not find any valid pyseed includes')
-        return False
-    #
-    # Load all model's schema
-    # 1. Find all the models definition in models package, please import all models in __init__.py
-    #
-    models = {}
+    model_settings = {}
+    domain_names, view_names = set(), set()
     module_name = 'models'
-    module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(output_path, module_name, '__init__.py'))
+    module_spec = importlib.util.spec_from_file_location(module_name, os.path.join('core', module_name, '__init__.py'))
     module = importlib.util.module_from_spec(module_spec)
     sys.modules[module_name] = module
     module_spec.loader.exec_module(module)
@@ -198,61 +143,136 @@ def _gen(s: str):
     for attr in dir(module):
         attribute = getattr(module, attr)
         if inspect.isclass(attribute) and issubclass(attribute, BaseModel):
-            logger.debug(f'  {attribute.__name__} with relations {list(attribute.__relations__.keys())}')
-            models[attribute.__name__] = attribute
-    # Inject layouts to model schema
-    for md_name, md_class in models.items():
-        models[md_name] = {'schema': md_class.schema(), **generate_names(md_name)}
-    #
-    # Create context using seed content
-    #
-    context = {
-        'models': models,  # {name: {names, schema}}}
-        'seeds': {},  # {name: {model, params, layout}}
-        'blueprints': [],  # [blueprint]
-    }
-    logger.info(f'Seed file blueprints:')
-    for bp in seed_content['blueprints']:  # Blueprints
-        bp_name = bp['name']
-        logger.info(f'{bp_name}/')
-        blueprint = {'views': [], 'params': bp.get('params', {}), **generate_names(bp_name)}
-        models_by_name = {}
-        for v in bp['views']:  # Views
-            v_name = v['name']
-            logger.info(f'  {v_name}/')
-            rows, seeds = parse_layout1(v['layout'], models)
-            for r in rows:
-                rs = ', '.join(map(lambda x: x['name'], r))
-                logger.info(f'    {rs}')
+            model_name, model_class = attribute.__name__, attribute
+            logger.info(f'- {model_name}')
+            # Parse model schema and views
+            schema = model_class.schema()
+            model_setting = {
+                'schema': schema,  # dict
+                **generate_names(model_name)
+            }
             #
-            view = {'blueprint': blueprint, 'rows': rows, 'seeds': seeds, 'params': v.get('params', {}), **generate_names(v_name)}
-            for seed in seeds:
-                seed_name = seed['name']
-                # Check dulplicated seed name
-                if seed_name in context['seeds']:
-                    logger.error(f'Found dulplicate seed with name {seed_name}')
+            views = []
+            for k, v in model_class.__views__.items():
+                # Filter views if include_domains has value
+                domains = v['domains']
+                if include_domains:
+                    domains = [d for d in domains if d in include_domains]
+                #
+                if not domains:
+                    continue
+                else:
+                    domain_names.update(domains)
+                # Parse view name
+                # e.g,
+                # - index -> blueprint = public, name = index
+                # - admin/dashboard -> blueprint = admin, name = dashboard
+                if '/' in k:
+                    blueprint, name = k.split('/')
+                else:
+                    blueprint = 'public'
+                    name = k
+                logger.info(f'    {blueprint}/{name}')
+                # Validate to make sure view name is unique
+                if name in view_names:
+                    logger.error(f'View name {v["name"]} is not unique')
                     return False
-                # Remove dulplicated model at blueprint level
-                seed_model = seed['model']
-                models_by_name[seed_model['name']] = seed_model
-                # Add relation models
-                for relation in seed_model['schema']['relations']:
-                    models_by_name[relation] = models[relation]
+                #
+                view_names.add(name)
+                #
+                l = parse_layout(v['layout'], schema)
+                views.append({
+                    'model': model_setting,
+                    'blueprint': blueprint,
+                    'domains': domains,
+                    'action': l['action'],
+                    'params': l['params'],
+                    'rows': l['rows'],
+                    'layout': v['layout'],
+                    **generate_names(name)
+                })
+            # Views may be empty if no views match
+            if not views:
+                continue
             #
-            blueprint['views'].append(view)
-            blueprint['models'] = models_by_name.values()
+            model_setting['views'] = views
+            # Filter model if include_models has value
+            if include_models and include_models.count(model_name) == 0:  # case-sensitive
+                continue
+            #
+            model_settings[model_name] = model_setting
+    #
+    if not model_settings:
+        logger.error('Can not find any models to gen')
+        return False
+    #
+    # For each domain:
+    # 1. Build context
+    # 2. Render jinja2 templates
+    #
+    for domain in domain_names:
+        # Domain should be a project folder, e.g, www/miniapp/android/ios
+        logger.info(f'Gen for domain {domain}')
         #
-        context['blueprints'].append(blueprint)
-    #
-    # Do generation logic for each includes
-    # NOTE: only files with jinja2 ext will be generated
-    #
-    env = _prepare_jinja2_env()
-    logger.info(f'Generate template at {output_path}')
-    for include in includes:
-        base = os.path.dirname(include)
-        name = os.path.basename(include)
-        _recursive_render(base, base, name, context, env)
+        # Parse .pyseed-includes in current folder, files whose name ends with jinja2 and folders whose name contains syntax {{ should be included
+        # e.g,
+        #   www/static/js/enums.js.jinja2
+        #   www/templates/{{#blueprints}}
+        #   www/views/{{#blueprints}}.stub.py.jinja2
+        #
+        includes_file = '.pyseed-includes'
+        includes = []
+        logger.info('Includes:')
+        with open(includes_file) as file:
+            for line in file:
+                line = line.strip()
+                # skip comments and blank lines
+                if line.startswith('#') or len(line) == 0:
+                    continue
+                # only process the folders or files under output path
+                if line.startswith(domain):
+                    includes.append(line)
+                    logger.info('  ' + line)
+        if not includes:
+            logger.error(f'Can not find any valid includes')
+            return False
+        #
+        # Build context
+        #
+        blueprints = []
+        for model_name in model_settings.keys():
+            model_setting = model_settings[model_name]
+            # Filter views under this domain and init blueprints
+            for v in model_setting['views']:
+                if domain in v['domains']:
+                    blueprint_name = v['blueprint']
+                    blueprint = next((b for b in blueprints if b['name'] == blueprint_name), None)
+                    if not blueprint:
+                        blueprint = {'views': [], 'models': [], **generate_names(blueprint_name)}
+                        blueprints.append(blueprint)
+                    #
+                    blueprint['views'].append(v)
+        #
+        logger.info(f'Blueprints:')
+        for bp in blueprints:  # Blueprints
+            bp_name = bp['name']
+            logger.info(f'{bp_name}/')
+            for v in bp['views']:  # Views
+                v_name, v_layout = v['name'], v['layout']
+                logger.info(f'  {v_name}: {v_layout}')
+        #
+        context = {
+            'models': model_settings,
+            'blueprints': blueprints,
+        }
+        #
+        # Do generation logic for each includes
+        #
+        env = _prepare_jinja2_env()
+        for include in includes:
+            base = os.path.dirname(include)
+            name = os.path.basename(include)
+            _recursive_render(base, base, name, context, env)
 
 
 def _recursive_render(t_base, o_base, name, context, env):
@@ -399,13 +419,23 @@ def main(args: List[str]) -> bool:
     """ Main. """
     parser = argparse.ArgumentParser(prog="pyseed gen")
     parser.add_argument(
-        "-s",
+        '-m',
         nargs='?',
-        metavar='seed',
-        default='www',
-        help="Specify the seed file name, default value is www. "
-             "i.e, -s app means using seed file ./app.seed and models from ./app to generate files to ./app",
+        metavar='models',
+        default=None,
+        help='Tells pyseed to generate action for specific models.'
+             'e.g,'
+             '-m User means generating all views for User model'
     )
-    # TODO: support install/upgrade command
+    parser.add_argument(
+        '-d',
+        nargs='?',
+        metavar='domains',
+        default=None,
+        help='Tells pyseed to generate action for specific domains.'
+             'e.g,'
+             '-d www means generating all models\' views under www domain'
+             '-m User -d www means generating all views for User model under www domain'
+    )
     parsed_args = parser.parse_args(args)
-    return _gen(parsed_args.s)
+    return _gen(parsed_args.m, parsed_args.d)

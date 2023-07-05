@@ -1,0 +1,17 @@
+//
+// Enums
+//
+
+{% set logic_controls = namespace(names=[]) %}
+var global_enums = {
+{# models is {name: {names, schema}}} #}
+{% for mn, mm in models|items %}
+{% for fn, fs in mm.schema.properties|items %}
+{% set fs_ = fs['items'] if fs.type == 'array' else fs %}
+{% if fs_.enum and fs_.py_type not in logic_controls.names %}
+{{ fs_.py_type }}: {{ fs_.enum_titles }},
+{% set logic_controls.names = logic_controls.names + [fs_.py_type] %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+}
