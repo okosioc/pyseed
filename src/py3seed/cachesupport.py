@@ -8,11 +8,7 @@
     :copyright: (c) 2021 by weiminfeng.
     :date: 2022/9/14
 """
-import inflection
-
-from . import DataError
-from .model import BaseModel
-from .utils import Pagination
+from py3seed import DataError, BaseModel, Pagination, inflection
 
 # {model_name:[dict]}
 # Note: Do no store model object directly, as it may cause concurrent accessing issue

@@ -11,9 +11,7 @@
 import re
 from datetime import datetime
 
-import inflection
-
-from py3seed import Comparator, SimpleEnumMeta
+from py3seed import Comparator, SimpleEnumMeta, inflection
 
 # Valid datetime formats
 _valid_formats = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d']

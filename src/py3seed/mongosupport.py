@@ -15,9 +15,7 @@ from bson import ObjectId
 from pymongo import MongoClient, uri_parser, ReadPreference, WriteConcern
 from pymongo.cursor import Cursor as PyMongoCursor
 
-from .error import DatabaseError, DataError
-from .model import BaseModel
-from .utils import Pagination
+from py3seed import DatabaseError, DataError, BaseModel, Pagination
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Connection - Support multiple database

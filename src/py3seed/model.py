@@ -18,7 +18,6 @@ from typing import no_type_check, Dict, Type, Callable, get_origin, get_args, Se
 from bson import ObjectId
 
 from .error import SchemaError, DataError, PathError
-from .utils import parse_layout
 
 
 # ----------------------------------------------------------------------------------------------------------------------

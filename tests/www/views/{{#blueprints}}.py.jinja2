@@ -14,8 +14,18 @@ from tests.core.models import {{ view.model.name }}
 
 
 {% for view in blueprint.views %}
+{# define view function #}
 @{{ blueprint.name_snake }}.route('/{{ view.name }}')
 def {{ view.name_snake }}():
     """ {{ view.params.title }}. """
     pass
+
+
+{# define post function in form #}
+{% if view.action == 'form' %}
+@{{ blueprint.name_snake }}.route('/{{ view.name }}_create', methods=['POST'])
+def {{ view.name_snake }}_create():
+    """ Post {{ view.params.title }}. """
+    pass
+{% endif %}
 {% endfor %}

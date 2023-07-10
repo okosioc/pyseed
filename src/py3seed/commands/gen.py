@@ -23,9 +23,8 @@ from flask import request
 from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader
 from werkzeug.urls import url_quote, url_encode
 
-from .. import registered_models, BaseModel
-from ..error import TemplateError, LayoutError
-from ..utils import work_in, generate_names, parse_layout1, iterate_layout, parse_layout
+from py3seed import registered_models, BaseModel, TemplateError, LayoutError
+from py3seed.utils import work_in, generate_names, iterate_layout, parse_layout
 
 logger = logging.getLogger('pyseed')
 
@@ -371,19 +370,18 @@ def _recursive_render(t_base, o_base, name, context, env):
         if not t_name.endswith('.jinja2'):
             return
         # Overwrite with template file content firstly
-        # TODO: Merge logic
         # e.g,
         #  1. Files that has list or varible syntax, regenerate each time; The jinjas generated should be removed after generation
-        #  www/templates/seeds/{{#seeds}}.html.jinja2
+        #  www/templates/public/{{#views}}.html.jinja2
         #    ->
-        #    www/templates/seeds/User-form.html.jinja2
-        #    www/templates/seeds/Project-read.html.jinja2
+        #    www/templates/public/user-profile.html.jinja2
+        #    www/templates/public/team-members.html.jinja2
         #    ...
         #  2. Files that is just a jinja, no need to overwrite just render directly; The jinja file should NOT be removed after generation
         #  www/static/js/enums.js.jinja2
         for o_name in out_names:
             o_path = os.path.join(o_base, o_name)
-            if out_key:
+            if out_key:  # out_key is not None means it has list or varible syntax
                 shutil.copyfile(t_path, o_path)
                 shutil.copymode(t_path, o_path)
         # Change working folder to ., so that jinja2 works ok
@@ -395,7 +393,18 @@ def _recursive_render(t_base, o_base, name, context, env):
             o_context = {k: v for k, v in context.items() if not k.startswith('__')}
             #
             for i, o_name in enumerate(out_names):
-                o_file = o_name.replace('.jinja2', '')
+                #
+                # AutoMerge Version 0:
+                # A simple way to preserve custom code, always generate code to the file with suffix .0
+                # e,g,
+                # user-profile.html.0 is existed, always generate code to user-profile.html.0, then you need to merge manually
+                #
+                o_file_0 = o_name.replace('.jinja2', '.0')
+                if os.path.exists(o_file_0):
+                    o_file = o_file_0
+                else:
+                    o_file = o_name.replace('.jinja2', '')
+                #
                 logger.debug(f'render {o_file}')
                 # Remove __ so that object can be accessed in template
                 if out_key:

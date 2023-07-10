@@ -23,7 +23,6 @@ def list_dependencies_and_versions() -> List[Tuple[str, str]]:
         "flask",
         "pymongo",
         "importlib_metadata",
-        "inflection",
     )
     return [(dep, version(dep)) for dep in deps]
 

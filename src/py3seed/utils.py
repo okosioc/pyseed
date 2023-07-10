@@ -18,8 +18,7 @@ import shutil
 import stat
 import logging
 
-from .error import LayoutError
-import inflection
+from py3seed import inflection, LayoutError
 
 logger = logging.getLogger('pyseed')
 

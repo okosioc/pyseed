@@ -14,4 +14,10 @@ public = Blueprint('public', __name__)
 @public.route('/profile')
 def profile():
     """ User. """
-    return render_template('public/profile.html')
+    pass
+
+
+@public.route('/profile_create', methods=['POST'])
+def profile_create():
+    """ Post User. """
+    pass
