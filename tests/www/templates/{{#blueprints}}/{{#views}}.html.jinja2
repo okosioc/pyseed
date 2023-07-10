@@ -1,12 +1,16 @@
-<!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ view.params.title }}</title>
 </head>
 <body>
     <h1>{{ view.params.title }}</h1>
     <h2>{{ view.action }}</h2>
+    {% for row in view.rows %}
+    <div class="row">
+        {% for column in row %}
+        <div class="column">{{ column.name }}</div>
+        {% endfor %}
+    </div>
+    {% endfor %}
 </body>
 </html>

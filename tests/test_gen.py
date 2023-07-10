@@ -100,4 +100,42 @@ def test_layout_parsing():
 def test_gen():
     """ Test Generation. """
     os.chdir('tests')
+    # Generate
     _gen(None, None)
+    # Validate
+    # public.py should be not changed, as public.py.0 exsits
+    public_py = open('www/views/public.py', encoding='utf-8').read()
+    assert public_py == '''""" public module. """
+from flask import Blueprint, render_template, jsonify
+
+public = Blueprint('public', __name__)
+
+
+@public.route('/profile')
+def profile():
+    """ User. """
+    return render_template('public/profile.html')
+
+
+@public.route('/profile_create', methods=['POST'])
+def profile_create():
+    """ Post User. """
+    return jsonify(error=0, message='OK')
+'''
+    # profile.html should be 3-way merged
+    # We add class="page-header" to h1 tag manually, this should be kept after merging
+    profile_html = open('www/templates/public/profile.html', encoding='utf-8').read()
+    assert profile_html == '''<html>
+<head>
+    <title>User</title>
+</head>
+<body>
+    <h1 class="page-header">User</h1>
+    <h2>form</h2>
+    <div class="row">
+        <div class="column">$</div>
+        <div class="column">0</div>
+    </div>
+</body>
+</html>'''
+    # team-members.html should be 3-way merged, but have conflicts

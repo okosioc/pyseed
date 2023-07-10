@@ -180,7 +180,7 @@ def parse_layout(body, schema):
                     if not col_lines:  # some column may have not inner layout, e.g, blank column/simple field
                         continue
                     #
-                    logger.debug(f'Column {i}, {j}: {col_name}\n' + '\n'.join(col_lines))
+                    logger.debug(f'Column ({i}, {j}): {col_name}\n' + '\n'.join(col_lines))
                     #
                     # Column name possible values:
                     # 1) blank column prints only a placeholder

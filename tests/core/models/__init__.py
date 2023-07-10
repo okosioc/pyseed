@@ -62,6 +62,19 @@ class Team(MongoModel):
     create_time: datetime = datetime.now
     #
     __icon__ = 'users'
+    __views__ = {
+        'team-members': {
+            'domains': ['www'],
+            'layout': '''#!read?title=Members
+                $#4,           members#8                                                  
+                  logo           avatar, name, status, roles, email, phone, team_join_time
+                  name
+                  phone                                                              
+                  members                                                                 
+                  create_time
+            ''',
+        },
+    }
 
 
 def evens():

@@ -25,6 +25,7 @@ from werkzeug.urls import url_quote, url_encode
 
 from py3seed import registered_models, BaseModel, TemplateError, LayoutError
 from py3seed.utils import work_in, generate_names, iterate_layout, parse_layout
+from py3seed.merge3 import Merge3
 
 logger = logging.getLogger('pyseed')
 
@@ -387,38 +388,89 @@ def _recursive_render(t_base, o_base, name, context, env):
         # Change working folder to ., so that jinja2 works ok
         o_base = os.path.abspath(o_base)
         with work_in(o_base):
-            logger.debug(f'working at {o_base}')
+            logger.info(f'Working at {o_base}')
             # Set jinja2's path
             env.loader = FileSystemLoader('.')
             o_context = {k: v for k, v in context.items() if not k.startswith('__')}
             #
             for i, o_name in enumerate(out_names):
+                o_file_raw = o_name.replace('.jinja2', '')
                 #
-                # AutoMerge Version 0:
+                # AutoMerge
+                # Check if output with additional suffix exsit, if yes, go into below merging logic, otherwise, render(overwrite) directly
+                #
+                # - Output name with additional suffix .0:
                 # A simple way to preserve custom code, always generate code to the file with suffix .0
                 # e,g,
-                # user-profile.html.0 is existed, always generate code to user-profile.html.0, then you need to merge manually
+                # user-profile.html.0 exists, always generate code to user-profile.html.0, then you need to merge manually
+                #
+                # - Output name with additional suffix .1:
+                # Using .1(BASE), .11(THIS) and .111(OTHER) to perform a 3-way merge
+                # e.g,
+                # user-profile.html.1 exists, coping user-profile.html as user-profile.html.11, generating user-profile.html.111, then perform 3-way merge to user-profile.html
                 #
                 o_file_0 = o_name.replace('.jinja2', '.0')
+                o_file_1 = o_name.replace('.jinja2', '.1')
+                o_file_11 = o_name.replace('.jinja2', '.11')
+                o_file_111 = o_name.replace('.jinja2', '.111')
                 if os.path.exists(o_file_0):
                     o_file = o_file_0
+                elif os.path.exists(o_file_1):
+                    if os.path.exists(o_file_111):
+                        logger.warning(f'Please solve merging conflicts of {o_file_raw}')
+                        continue
+                    # THIS, copy from exsiting file
+                    shutil.copyfile(o_file_raw, o_file_11)
+                    shutil.copymode(o_file_raw, o_file_11)
+                    # OTHER, newly genearted file
+                    o_file = o_file_111
                 else:
-                    o_file = o_name.replace('.jinja2', '')
+                    o_file = o_file_raw
                 #
-                logger.debug(f'render {o_file}')
+                logger.info(f'Render {o_file}')
                 # Remove __ so that object can be accessed in template
                 if out_key:
                     o_context[out_key[2:]] = out_values[i]
+                #
+                # Render file
                 #
                 try:
                     tmpl = env.get_template(o_name)
                 except TemplateSyntaxError as exception:
                     exception.translated = False
                     raise
-                rendered = tmpl.render(**o_context)
                 #
+                rendered = tmpl.render(**o_context)
                 with open(o_file, 'w', encoding='utf-8') as f:
                     f.write(rendered)
+                #
+                # Perform 3-way merge
+                #
+                if os.path.exists(o_file_1):
+                    logger.info(f'Perform 3-way merge of {o_file_raw}')
+                    # BASE
+                    with open(o_file_1, 'r', encoding='utf-8') as f:
+                        base = f.read().splitlines()
+                    # THIS
+                    with open(o_file_11, 'r', encoding='utf-8') as f:
+                        this = f.read().splitlines()
+                    # OTHER
+                    with open(o_file_111, 'r', encoding='utf-8') as f:
+                        other = f.read().splitlines()
+                    #
+                    m3 = Merge3(base, other, this)
+                    merged = '\n'.join(m3.merge_lines('OTHER', 'THIS'))
+                    # print('\n'.join(m3.merge_annotated()))
+                    with open(o_file_raw, 'w', encoding='utf-8') as f:
+                        f.write(merged)
+                    # Has conficts, need to solve manually
+                    if '=======' in merged:
+                        pass
+                    else:
+                        # Rename .111 to .1 for next merging
+                        os.rename(o_file_111, o_file_1)
+                        # Remove .11
+                        os.remove(o_file_11)
                 # Remove template file
                 if out_key:
                     os.remove(o_name)
