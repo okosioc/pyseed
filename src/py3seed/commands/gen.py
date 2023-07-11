@@ -144,7 +144,7 @@ def _gen(ms: str, ds: str):
         attribute = getattr(module, attr)
         if inspect.isclass(attribute) and issubclass(attribute, BaseModel):
             model_name, model_class = attribute.__name__, attribute
-            logger.info(f'- {model_name}')
+            logger.info(f'{model_name}')
             # Parse model schema and views
             schema = model_class.schema()
             model_setting = {
@@ -172,7 +172,9 @@ def _gen(ms: str, ds: str):
                 else:
                     blueprint = 'public'
                     name = k
-                logger.info(f'    {blueprint}/{name}')
+                #
+                layout = v['layout'].strip()
+                logger.info(f'- {blueprint}/{name}: {layout}')
                 # Validate to make sure view name is unique
                 if name in view_names:
                     logger.error(f'View name {v["name"]} is not unique')
@@ -180,7 +182,7 @@ def _gen(ms: str, ds: str):
                 #
                 view_names.add(name)
                 #
-                l = parse_layout(v['layout'], schema)
+                l = parse_layout(layout, schema)
                 views.append({
                     'model': model_setting,
                     'blueprint': blueprint,
@@ -188,7 +190,7 @@ def _gen(ms: str, ds: str):
                     'action': l['action'],
                     'params': l['params'],
                     'rows': l['rows'],
-                    'layout': v['layout'],
+                    'layout': layout,
                     **generate_names(name)
                 })
             # Views may be empty if no views match
@@ -258,8 +260,8 @@ def _gen(ms: str, ds: str):
             bp_name = bp['name']
             logger.info(f'{bp_name}/')
             for v in bp['views']:  # Views
-                v_name, v_layout = v['name'], v['layout']
-                logger.info(f'  {v_name}: {v_layout}')
+                v_name = v['name']
+                logger.info(f'  {v_name}')
         #
         context = {
             'models': model_settings,
@@ -417,7 +419,7 @@ def _recursive_render(t_base, o_base, name, context, env):
                     o_file = o_file_0
                 elif os.path.exists(o_file_1):
                     if os.path.exists(o_file_111):
-                        logger.warning(f'Please solve merging conflicts of {o_file_raw}')
+                        logger.warning(f'Please solve last merging conflicts of {o_file_raw}')
                         continue
                     # THIS, copy from exsiting file
                     shutil.copyfile(o_file_raw, o_file_11)
@@ -450,22 +452,22 @@ def _recursive_render(t_base, o_base, name, context, env):
                     logger.info(f'Perform 3-way merge of {o_file_raw}')
                     # BASE
                     with open(o_file_1, 'r', encoding='utf-8') as f:
-                        base = f.read().splitlines()
+                        base = f.read().splitlines(True)
                     # THIS
                     with open(o_file_11, 'r', encoding='utf-8') as f:
-                        this = f.read().splitlines()
+                        this = f.read().splitlines(True)
                     # OTHER
                     with open(o_file_111, 'r', encoding='utf-8') as f:
-                        other = f.read().splitlines()
+                        other = f.read().splitlines(True)
                     #
                     m3 = Merge3(base, other, this)
-                    merged = '\n'.join(m3.merge_lines('OTHER', 'THIS'))
+                    merged = ''.join(m3.merge_lines('OTHER', 'THIS'))
                     # print('\n'.join(m3.merge_annotated()))
                     with open(o_file_raw, 'w', encoding='utf-8') as f:
                         f.write(merged)
                     # Has conficts, need to solve manually
                     if '=======' in merged:
-                        pass
+                        logger.warning(f'Please solve merging conflicts of {o_file_raw}')
                     else:
                         # Rename .111 to .1 for next merging
                         os.rename(o_file_111, o_file_1)

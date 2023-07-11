@@ -99,10 +99,55 @@ def test_layout_parsing():
 
 def test_gen():
     """ Test Generation. """
+    # Change working folder
     os.chdir('tests')
+    #
+    # Init
+    #
+    # Prepare team-members.html*, which is used to test 3-way merge with conflicts
+    # We need to remove the outstanding files generated in last test run
+    os.remove('www/templates/public/team-members.html.11')
+    os.remove('www/templates/public/team-members.html.111')
+    # Then manually init BASE and THIS file, otherwise then will be overwritten during each test
+    base = '''<html>
+<head>
+    <title>Members</title>
+</head>
+<body>
+    <h1 class="base">Members</h1>
+    <h2>read</h2>
+    <div class="row">
+        <div class="column">$</div>
+        <div class="column">members</div>
+    </div>
+</body>
+</html>'''
+    #
+    with open('www/templates/public/team-members.html.1', 'w', encoding='utf-8') as f:
+        f.write(base)
+    #
+    this = '''<html>
+<head>
+    <title>Members</title>
+</head>
+<body>
+    <h1 class="this">Members</h1>
+    <h2>read</h2>
+    <div class="row">
+        <div class="column">$</div>
+        <div class="column">members</div>
+    </div>
+</body>
+</html>'''
+    with open('www/templates/public/team-members.html', 'w', encoding='utf-8') as f:
+        f.write(this)
+    #
     # Generate
+    #
     _gen(None, None)
-    # Validate
+    #
+    # Test Cases
+    #
     # public.py should be not changed, as public.py.0 exsits
     public_py = open('www/views/public.py', encoding='utf-8').read()
     assert public_py == '''""" public module. """
@@ -138,4 +183,33 @@ def profile_create():
     </div>
 </body>
 </html>'''
-    # team-members.html should be 3-way merged, but have conflicts
+    # team-members.html should be 3-way merged with conflicts
+    team_members_html = open('www/templates/public/team-members.html', encoding='utf-8').read()
+    assert team_members_html == '''<html>
+<head>
+    <title>Members</title>
+</head>
+<body>
+<<<<<<< OTHER
+    <h1>Members</h1>
+=======
+    <h1 class="this">Members</h1>
+>>>>>>> THIS
+    <h2>read</h2>
+    <div class="row">
+        <div class="column">$</div>
+        <div class="column">members</div>
+    </div>
+</body>
+</html>'''
+    # enum.js should be rendered every time
+    enums_js = open('www/static/js/enums.js', encoding='utf-8').read()
+    assert enums_js == '''//
+// Enums
+//
+
+var global_enums = {
+UserStatus: {'normal': 'Normal', 'rejected': 'Rejected'},
+UserRole: {1: 'Member', 2: 'Editor', 9: 'Admin'},
+}
+'''
