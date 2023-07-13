@@ -66,8 +66,8 @@ class Team(MongoModel):
         'team-members': {
             'domains': ['www'],
             'layout': '''#!read?title=Members
-                $#4,           members#8                                                  
-                  logo           avatar, name, status, roles, email, phone, team_join_time
+                1#summary4,  members#8                                                  
+                  logo         avatar, name, status, roles, email, phone, team_join_time
                   name
                   phone                                                              
                   members                                                                 
@@ -119,14 +119,14 @@ class User(MongoModel):
         'profile': {
             'domains': ['www'],
             'layout': '''#!form?title=User
-                $#4,           0#8                                           
+                1#summary4,    2#8                                           
                   avatar         name  
                   name           phone                                                  
                   status         intro                                                 
                   roles          avatar                                                
-                  email
-                  phone
-                  create_time
+                  email        
+                  phone        
+                  create_time  
             '''
         },
     }

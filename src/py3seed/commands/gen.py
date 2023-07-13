@@ -18,7 +18,6 @@ import shutil
 import sys
 from typing import List
 
-import yaml
 from flask import request
 from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader
 from werkzeug.urls import url_quote, url_encode
@@ -104,7 +103,7 @@ def _prepare_jinja2_env():
     def parse_layout_fields(schema, action):
         """ Parse layout fields.
 
-        each column in layout can be blank('')/hyphen(-)/summary($)/group(number)/field(string)/inner fields(has children) suffixed with query and span string
+        each column in layout can be blank('')/hyphen(-)/group(integer&float)/field(string) suffixed with query and span string
         this function will return a list of field names.
         """
         return list(iterate_layout(schema[action], schema['groups']))

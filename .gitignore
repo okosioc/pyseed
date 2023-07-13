@@ -25,6 +25,6 @@ htmlcov/
 .coverage.*
 *,cover
 
-# pytest
+# pyseed
 *.*.11
 *.*.111

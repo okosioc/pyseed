@@ -81,7 +81,7 @@ def generate_names(name):
 
 
 # Match span
-SPAN_REGEX = re.compile(r'^(.*)#([0-9]+)$')
+SPAN_REGEX = re.compile(r'^(.*)#([a-zA-Z_-]*)([0-9]+)$')
 
 
 def parse_layout(body, schema):
@@ -152,11 +152,8 @@ def parse_layout(body, schema):
                 # Hyphen column
                 elif col_name == '-':
                     pass
-                # Summary column
-                elif col_name == '$':
-                    pass
-                # Group column
-                elif col_name.isdigit():
+                # Group column, e.g, 1, 1.1, 1.2, 2, 2.1
+                elif col_name.replace('.', '').isdigit():
                     pass
                 else:
                     keys = _schema['properties'].keys()  # type of _schema is always a object
@@ -186,8 +183,7 @@ def parse_layout(body, schema):
                     # Column name possible values:
                     # 1) blank column prints only a placeholder
                     # 2) hyphen(-) prints line separator, i.e, <hr/>
-                    # 3) group column(digit) combines multiple columns
-                    # 4) summary column($) prints model's summary
+                    # 3) group column(integer/float) combines multiple columns
                     #
                     # While schema is a subset of Object Schema from OAS 3.0,
                     # In order to keep all the things simple, we do not use complex keywords such as oneOf, patternProperties, additionalProperties, etc.
@@ -225,11 +221,8 @@ def parse_layout(body, schema):
                     # Hyphen column
                     elif col_name == '-':
                         pass
-                    # Summary column
-                    elif col_name == '$':
-                        column['rows'] = _parse_lines(level + 1, col_lines, _schema)
                     # Group column
-                    elif col_name.isdigit():
+                    elif col_name.replace('.', '').isdigit():
                         column['rows'] = _parse_lines(level + 1, col_lines, _schema)
                     else:
                         inner_schema = _schema['properties'][col_name]
@@ -252,15 +245,18 @@ def parse_layout(body, schema):
         ret = {
             'raw': column_str,
         }
-        # Parse span at the end, e.g, a?param=1#4
+        # Parse span at the end, e.g, a?param=1#summary4
         span_match = SPAN_REGEX.match(column_str)
         if span_match:
             column_str = span_match.group(1)
-            ret.update({'span': int(span_match.group(2))})
+            if span_match.group(2):
+                ret.update({'format': span_match.group(2)})  # -> summary
+            #
+            ret.update({'span': int(span_match.group(3))})  # -> 4
         # Parse params, e.g, a?param=1#4
         if '?' in column_str:
-            column_str, params = _parse_query_str(column_str)
-            ret.update({'params': params})
+            column_str, column_params = _parse_query_str(column_str)
+            ret.update({'params': column_params})
         #
         ret.update({'name': column_str})
         #

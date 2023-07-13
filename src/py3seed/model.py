@@ -108,10 +108,11 @@ class SimpleEnum(object, metaclass=SimpleEnumMeta):
 class Format(SimpleEnum):
     """ Predefined available formats, which should be used to control ui or api generation.
 
-    Below values are the same with OAS 3.0
-    https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#data-types
-    https://swagger.io/docs/specification/data-models/data-types/
+    NOTE: Name of format can NOT end with interger, as #FormatInteger has special meaning in view layout, e.g, '#summary4' means with summary format and 4 span
     """
+    # Below values are the same with OAS 3.0
+    # - https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#data-types
+    # - https://swagger.io/docs/specification/data-models/data-types/
     DATETIME = 'datetime'  # Default format for datetime
     DATE = 'date'
     PASSWORD = 'password'
@@ -123,7 +124,6 @@ class Format(SimpleEnum):
     SELECT = 'select'  # Default format for SimpleEnum
     BUTTONGROUP = 'buttongroup'
     TAG = 'tag'  # Tag input
-    PASSWORD = 'password'
     TEXTAREA = 'textarea'
     RTE = 'rte'
     MARKDOWN = 'markdown'
@@ -141,6 +141,7 @@ class Format(SimpleEnum):
     METRIC = 'metric'  # Statistic card for simple or object
     RANGE = 'range'  # Range picker
     # Below values are used for inner model/dict or list of model/dict
+    SUMMARY = 'summary'  # Summary of a object, i.e, {}
     TAB = 'tab'  # Objects with tabs nav, i.e, [{}]
     TABLE = 'table'  # Objects in table, i.e, [{}]
     MODAL = 'modal'  # Objects with some fields in table and all fields in modal, i.e, [{}]

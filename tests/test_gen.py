@@ -22,11 +22,11 @@ def test_layout_parsing():
     """ Test layout parsing. """
     # User profile
     user_profile_layout = '''#!form?title=User
-        $#4,           0#8                                           
-          avatar         name  
-          name           phone                                                  
-          status         intro                                                 
-          roles          avatar                                                
+        1#summary4,  2#8                                           
+          avatar       name  
+          name         phone                                                  
+          status       intro                                                 
+          roles        avatar                                                
           email
           phone
           create_time
@@ -34,8 +34,8 @@ def test_layout_parsing():
     user_schema = User.schema()
     # Team members
     team_members_layout = '''#!read?title=Members
-        $#4,           members#8                                                  
-          logo           avatar, name, status, roles, email, phone, team_join_time
+        1#summary4,  members#8                                                  
+          logo         avatar, name, status, roles, email, phone, team_join_time
           name
           phone                                                              
           members                                                                 
@@ -82,7 +82,8 @@ def test_layout_parsing():
     assert layout['params']['title'] == 'User'
     assert len(layout['rows']) == 1
     first_row = layout['rows'][0]
-    assert first_row[0]['name'] == '$'
+    assert first_row[0]['name'] == '1'
+    assert first_row[0]['format'] == 'summary'
     assert first_row[0]['span'] == 4
     assert len(first_row[0]['rows']) == 7
     assert first_row[0]['rows'][0][0]['name'] == 'avatar'
@@ -117,7 +118,7 @@ def test_gen():
     <h1 class="base">Members</h1>
     <h2>read</h2>
     <div class="row">
-        <div class="column">$</div>
+        <div class="column">1</div>
         <div class="column">members</div>
     </div>
 </body>
@@ -134,7 +135,7 @@ def test_gen():
     <h1 class="this">Members</h1>
     <h2>read</h2>
     <div class="row">
-        <div class="column">$</div>
+        <div class="column">1</div>
         <div class="column">members</div>
     </div>
 </body>
@@ -178,8 +179,8 @@ def profile_create():
     <h1 class="page-header">User</h1>
     <h2>form</h2>
     <div class="row">
-        <div class="column">$</div>
-        <div class="column">0</div>
+        <div class="column">1</div>
+        <div class="column">2</div>
     </div>
 </body>
 </html>'''
@@ -197,7 +198,7 @@ def profile_create():
 >>>>>>> THIS
     <h2>read</h2>
     <div class="row">
-        <div class="column">$</div>
+        <div class="column">1</div>
         <div class="column">members</div>
     </div>
 </body>
