@@ -22,24 +22,24 @@ def test_layout_parsing():
     """ Test layout parsing. """
     # User profile
     user_profile_layout = '''#!form?title=User
-        1#summary4,  2#8                                           
-          avatar       name  
-          name         phone                                                  
-          status       intro                                                 
-          roles        avatar                                                
-          email
+        1#summary4,    2#8                                           
+          avatar         name  
+          name           phone                                                  
+          status         intro                                                 
+          roles          avatar                                                
+          email          point#4,
           phone
           create_time
     '''
     user_schema = User.schema()
     # Team members
     team_members_layout = '''#!read?title=Members
-        1#summary4,  members#8                                                  
-          logo         avatar, name, status, roles, email, phone, team_join_time
-          name
-          phone                                                              
-          members                                                                 
-          create_time
+        1#summary,     members#8                                                  
+          logo           avatar, name, status, roles, email, phone, team_join_time
+          name         
+          phone                                                                
+          members                                                                   
+          create_time  
     '''
     team_schema = Team.schema()
 
@@ -87,15 +87,21 @@ def test_layout_parsing():
     assert first_row[0]['span'] == 4
     assert len(first_row[0]['rows']) == 7
     assert first_row[0]['rows'][0][0]['name'] == 'avatar'
-    assert len(first_row[1]['rows']) == 4
+    assert len(first_row[1]['rows']) == 5
     assert first_row[1]['rows'][1][0]['name'] == 'phone'
+    assert first_row[1]['rows'][4][0]['name'] == 'point'
+    assert first_row[1]['rows'][4][0]['span'] == 4
+    assert first_row[1]['rows'][4][1]['name'] == ''
 
     # Team member layout
     layout = parse_layout(team_members_layout, team_schema)
     assert layout['action'] == 'read'
     first_row = layout['rows'][0]
+    assert first_row[0]['span'] is None
+    assert first_row[0]['format'] == 'summary'
     assert len(first_row[1]['rows'][0]) == 7
     assert first_row[1]['rows'][0][0]['name'] == 'avatar'
+
 
 
 def test_gen():
@@ -107,8 +113,11 @@ def test_gen():
     #
     # Prepare team-members.html*, which is used to test 3-way merge with conflicts
     # We need to remove the outstanding files generated in last test run
-    os.remove('www/templates/public/team-members.html.11')
-    os.remove('www/templates/public/team-members.html.111')
+    try:
+        os.remove('www/templates/public/team-members.html.11')
+        os.remove('www/templates/public/team-members.html.111')
+    except FileNotFoundError:
+        pass
     # Then manually init BASE and THIS file, otherwise then will be overwritten during each test
     base = '''<html>
 <head>

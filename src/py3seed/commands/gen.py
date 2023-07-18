@@ -23,7 +23,7 @@ from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader
 from werkzeug.urls import url_quote, url_encode
 
 from py3seed import registered_models, BaseModel, TemplateError, LayoutError
-from py3seed.utils import work_in, generate_names, iterate_layout, parse_layout
+from py3seed.utils import work_in, generate_names, get_layout_fields, parse_layout
 from py3seed.merge3 import Merge3
 
 logger = logging.getLogger('pyseed')
@@ -100,13 +100,13 @@ def _prepare_jinja2_env():
         # If no matching, return nothing
         return None
 
-    def parse_layout_fields(schema, action):
-        """ Parse layout fields.
+    def parse_layout_fields(layout):
+        """ Get layout fields.
 
-        each column in layout can be blank('')/hyphen(-)/group(integer&float)/field(string) suffixed with query and span string
+        each column in layout can be blank('')/hyphen(-)/group(integer&float)/field(string) suffixed with query and format-span string
         this function will return a list of field names.
         """
-        return list(iterate_layout(schema[action], schema['groups']))
+        return list(get_layout_fields(layout))
 
     env.globals['update_query'] = update_query
     env.globals['new_model'] = new_model
@@ -118,9 +118,9 @@ def _prepare_jinja2_env():
 
 def _gen(ms: str, ds: str):
     """ Gen. """
-    logger.info(f'Gen for domain(s) {ms} under domain(s) {ds}')
     include_models = [m.strip() for m in ms.split(',')] if ms else []
     include_domains = [d.strip() for d in ds.split(',')] if ds else []
+    logger.info(f'Gen for domain(s) {include_models} under domain(s) {include_domains}')
     # Domains should be project folders, i.e, [www, miniapp, android, ios, ...]
     for d in include_domains:
         if not os.path.exists(d):
@@ -134,7 +134,11 @@ def _gen(ms: str, ds: str):
     model_settings = {}
     domain_names, view_names = set(), set()
     module_name = 'models'
-    module_spec = importlib.util.spec_from_file_location(module_name, os.path.join('core', module_name, '__init__.py'))
+    module_path = os.path.join('core', module_name, '__init__.py')
+    if not os.path.exists(module_path):
+        logger.error(f'Package does NOT exist at {module_path}')
+        return False
+    module_spec = importlib.util.spec_from_file_location(module_name, module_path)
     module = importlib.util.module_from_spec(module_spec)
     sys.modules[module_name] = module
     module_spec.loader.exec_module(module)

@@ -524,7 +524,7 @@ class ModelMeta(ABCMeta):
                         editable=False,  # save field value will be updated by its source field, so no need to render in form
                         source_field_name=ann_name,  # Mark the source field
                     )
-                    # back_field_name should always has a meaningful value, if it is none, do not create back field in related object
+                    # back_field_name should always have a meaningful value, if it is none, do not create back field in related object
                     # e.g,
                     # project.activities.user -> user, no need to create back_field in user model as it is hard to search all the activities for user
                     # in such case, we need to create activity model, activity.project -> project.activities, activity.user -> user.activities

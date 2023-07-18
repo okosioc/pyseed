@@ -18,7 +18,7 @@ import shutil
 import stat
 import logging
 
-from py3seed import inflection, LayoutError
+from py3seed import inflection, LayoutError, Format
 
 logger = logging.getLogger('pyseed')
 
@@ -81,11 +81,13 @@ def generate_names(name):
 
 
 # Match span
-SPAN_REGEX = re.compile(r'^(.*)#([a-zA-Z_-]*)([0-9]+)$')
+FORMAT_SPAN_REGEX = re.compile(r'^(.*)#([a-zA-Z_-]*)([0-9]*)$')
 
 
 def parse_layout(body, schema):
-    """ Parse layout defined in a model action.
+    """ Parse layout defined in a model view.
+
+    Layout is multi-line string defined in a model view.
     e.g,
     'demo/user-profile': {              # action name
         'domains': ['www'],             # domains that this action is available
@@ -100,17 +102,49 @@ def parse_layout(body, schema):
               create_time
         ''',
     }
-    Return {action, params, rows}
+
+    Schema is a subset of Object Schema from OAS 3.0,
+    In order to keep all the things simple, we do not use complex keywords such as oneOf, patternProperties, additionalProperties, etc.
+    - https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#schemaObject
+    - https://swagger.io/docs/specification/data-models/
+    e.g,
+    _schema = {
+        type: object,
+        properties: {
+            name: {type: string},
+            avatar: {type: string, format: image},
+            status: {type: string, enum: [normal, rejected]},
+            team: {
+                type: object,
+                properties: {
+                    name: {type: string},
+                    ...
+                }
+            },
+            logins: {
+                type: array,
+                items: {
+                    type: object,
+                    properties: {
+                        ip: {type: string},
+                        time: {type: string, format: date-time}
+                    }
+                }
+            },
+        }
+    }
+
+    Return {action, params, rows}.
     e.g,
     {
         action: form
         params: {
             param: 1,
         },
-        rows: [                         # each column is a dict, which has name/params/span and inner rows
+        rows: [[                         # each column is a dict, which has name/params/format/span and inner rows
             {name: $, rows:[...]},
             {name: 0, rows:[...]},
-        ]
+        ]]
     }
     """
 
@@ -143,25 +177,11 @@ def parse_layout(body, schema):
             # Parse segment, first line is fields seperated by comma and the rest are layout of each field
             index_line = segment[0]
             columns = [_parse_column(c) for c in index_line.split(',')]
-            # Validate inddex line, while inner layout will be validated recursively
-            for column in columns:
-                col_name = column['name']
-                # Blank column
-                if not col_name:
-                    pass
-                # Hyphen column
-                elif col_name == '-':
-                    pass
-                # Group column, e.g, 1, 1.1, 1.2, 2, 2.1
-                elif col_name.replace('.', '').isdigit():
-                    pass
-                else:
-                    keys = _schema['properties'].keys()  # type of _schema is always a object
-                    if col_name not in keys:
-                        raise LayoutError(f'Field {col_name} not found in schema')
-            # Has inner layout
+            #
+            # Cut inner layout
+            #
             if len(segment) > 1:
-                logger.debug(f'{leading} Parsing level {level} segment:\n' + '\n'.join(segment))
+                # logger.debug(f'{leading} Parsing level {level} segment:\n' + '\n'.join(segment))
                 body_lines = segment[1:]
                 # Inject layout for each column
                 for j in range(0, len(columns)):
@@ -178,81 +198,77 @@ def parse_layout(body, schema):
                     if not col_lines:  # some column may have not inner layout, e.g, blank column/simple field
                         continue
                     #
-                    logger.debug(f'{leading} Column ({i},{j}): {col_name}\n' + '\n'.join(col_lines))
+                    column['lines'] = col_lines
+            #
+            # Parse inner layout and do validation
+            #
+            for j in range(0, len(columns)):
+                column = columns[j]
+                col_name = column['name']
+                #
+                col_lines = column.get('lines', None)
+                logger.debug(f'{leading} Column ({i},{j}): {col_name}' + (('\n' + '\n'.join(col_lines)) if col_lines else ''))
+                #
+                # Column name possible values:
+                # 1) blank column prints only a placeholder
+                # 2) hyphen(-) prints line separator, i.e, <hr/>
+                # 3) group column(integer/float) combines multiple fields
+                #
+                # Blank column
+                if not col_name:
+                    pass
+                # Hyphen column
+                elif col_name == '-':
+                    pass
+                # Group column
+                elif col_name.replace('.', '').isdigit():
+                    if not col_lines:
+                        raise LayoutError(f'Group {col_name} should have inner layout')
                     #
-                    # Column name possible values:
-                    # 1) blank column prints only a placeholder
-                    # 2) hyphen(-) prints line separator, i.e, <hr/>
-                    # 3) group column(integer/float) combines multiple columns
+                    column['rows'] = _parse_lines(level + 1, col_lines, _schema)
+                else:
+                    if col_name not in _schema['properties']:  # type of _schema is always a object
+                        raise LayoutError(f'Field {col_name} not found in schema')
                     #
-                    # While schema is a subset of Object Schema from OAS 3.0,
-                    # In order to keep all the things simple, we do not use complex keywords such as oneOf, patternProperties, additionalProperties, etc.
-                    # - https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#schemaObject
-                    # - https://swagger.io/docs/specification/data-models/
-                    # e.g,
-                    # _schema = {
-                    #     type: object,
-                    #     properties: {
-                    #         name: {type: string},
-                    #         avatar: {type: string, format: image},
-                    #         status: {type: string, enum: [normal, rejected]},
-                    #         team: {
-                    #             type: object,
-                    #             properties: {
-                    #                 name: {type: string},
-                    #                 ...
-                    #             }
-                    #         },
-                    #         logins: {
-                    #             type: array,
-                    #             items: {
-                    #                 type: object,
-                    #                 properties: {
-                    #                     ip: {type: string},
-                    #                     time: {type: string, format: date-time}
-                    #                 }
-                    #             }
-                    #         },
-                    #     }
-                    # }
-                    # Blank column
-                    if not col_name:
-                        pass
-                    # Hyphen column
-                    elif col_name == '-':
-                        pass
-                    # Group column
-                    elif col_name.replace('.', '').isdigit():
-                        column['rows'] = _parse_lines(level + 1, col_lines, _schema)
+                    column_schema = _schema['properties'][col_name]
+                    column_type = column_schema['type']
+                    inner_schema = None
+                    if column_type == 'object':
+                        inner_schema = column_schema
+                    elif column_type == 'array':
+                        inner_schema = column_schema['items'] if column_schema['items']['type'] == 'object' else None
+                    #
+                    if inner_schema:
+                        # Inner layout is optional for inner object
+                        if col_lines:
+                            column['rows'] = _parse_lines(level + 1, col_lines, inner_schema)  # Schema passing recursively should always be object
                     else:
-                        inner_schema = _schema['properties'][col_name]
-                        inner_type = inner_schema['type']
-                        if inner_type in ['object', 'array']:
-                            if not col_lines:
-                                raise LayoutError(f'Field {col_name} should have layout')
-                            # Schema passing recursively should always be object
-                            column['rows'] = _parse_lines(level + 1, col_lines, inner_schema if inner_type == 'object' else inner_schema['items'])
-                        else:
-                            raise LayoutError(f'{inner_type.capitalize()} field {col_name} can not have inner layout')
+                        if col_lines:
+                            raise LayoutError(f'{column_type.capitalize()} field {col_name} can not have inner layout')
+                    #
+                    column.pop('lines', None)
             #
             _rows.append(columns)
         #
         return _rows
 
     def _parse_column(column_str):
-        """ Parse column string, having params and span, e.g, a?param=1#4. """
+        """ Parse column string, having params and format-span, e.g, a?param=1#4. """
         column_str = column_str.strip()
         ret = {
             'raw': column_str,
+            'format': None,
+            'span': None,
         }
         # Parse span at the end, e.g, a?param=1#summary4
-        span_match = SPAN_REGEX.match(column_str)
-        if span_match:
-            column_str = span_match.group(1)
-            if span_match.group(2):
-                ret.update({'format': span_match.group(2)})  # -> summary
+        format_span_match = FORMAT_SPAN_REGEX.match(column_str)
+        if format_span_match:
+            column_str = format_span_match.group(1)
+            if format_span_match.group(2):
+                ret.update({'format': format_span_match.group(2)})  # -> summary
             #
-            ret.update({'span': int(span_match.group(3))})  # -> 4
+            if format_span_match.group(3):
+                ret.update({'span': int(format_span_match.group(3))})  # -> 4
         # Parse params, e.g, a?param=1#4
         if '?' in column_str:
             column_str, column_params = _parse_query_str(column_str)
@@ -315,24 +331,20 @@ def parse_layout(body, schema):
     }
 
 
-def iterate_layout(layout, groups=[]):
-    """ Each column in layout can be blank('')/hyphen(-)/summary($)/group(number)/field(string)/inner fields(has children), iterate the whole layout and return field names only.
-
-    :param layout: Parsed layout
-    :param groups: Group index in layout need to refer to this list
-    :return:
-    """
+def get_layout_fields(layout):
+    """ Do not recursively parse inner object/array, only return current level field names. """
     for row in layout:
         for col in row:
             col_name = col['name']
-            if col.get('children'):
-                yield from iterate_layout([col['children']], groups)
-            elif col_name.isdigit():
-                yield from iterate_layout(groups[int(col_name)], groups)
-            elif col_name in ('', '-', '$'):
+            if not col_name:
                 pass
+            elif col_name == '-':
+                pass
+            elif col_name.replace('.', '').isdigit():
+                yield from get_layout_fields(col['rows'])
             else:
-                yield col_name
+                # Return current level field names, do not recursively parse inner object/array
+                yield {k: col[k] for k in ('name', 'format', 'span', 'params')}
 
 
 class Pagination(object):

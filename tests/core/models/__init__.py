@@ -66,8 +66,8 @@ class Team(MongoModel):
         'team-members': {
             'domains': ['www'],
             'layout': '''#!read?title=Members
-                1#summary4,  members#8                                                  
-                  logo         avatar, name, status, roles, email, phone, team_join_time
+                1#summary4,    members#8                                                  
+                  logo           avatar, name, status, roles, email, phone, team_join_time
                   name
                   phone                                                              
                   members                                                                 
