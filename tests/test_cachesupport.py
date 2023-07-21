@@ -12,7 +12,9 @@ import re
 from datetime import datetime
 from typing import List
 
-from py3seed import CacheModel, RelationField
+import pytest
+
+from py3seed import CacheModel, RelationField, DataError
 
 
 class CTeam(CacheModel):
@@ -31,6 +33,8 @@ class CUser(CacheModel):
     team_join_time: datetime = None
     update_time: datetime = None
     create_time: datetime = datetime.now
+    #
+    __key__ = 'email'
 
 
 class CProject(CacheModel):
@@ -52,9 +56,7 @@ def test_crud():
     assert cproject_schema['relations'] == ['CUser']
 
     # Init
-    assert CUser.delete_many()
     assert CUser.count() == 0
-    assert CTeam.delete_many()
     assert CTeam.count() == 0
 
     # C
@@ -75,6 +77,12 @@ def test_crud():
     # U
     user2 = CUser(name='user3', email='user2@dev', team=team1, team_join_time=datetime.now())
     user2.save()
+    user2.email = 'user1@dev'
+    with pytest.raises(DataError) as exc_info:
+        user2.save()
+    assert 'Duplicate key' in str(exc_info.value)
+    user2.email = 'user2@dev'
+    #
     user2.name = 'user2'
     user2.save()
     assert user2.id == 2
@@ -104,7 +112,7 @@ def test_crud():
 
     # relation many to one
     del team1.members
-    assert list(map(lambda x:x.id, team1.members)) == [user3.id, user1.id]  # sort DESCENDING
+    assert list(map(lambda x: x.id, team1.members)) == [user3.id, user1.id]  # sort DESCENDING
 
     # relation many-to-many
     project1 = CProject(name='project1', members=[user1, user2])
@@ -113,3 +121,19 @@ def test_crud():
     project2 = CProject(name='project2', members=[user2])
     project2.save()
     assert len(user2.projects) == 2
+
+    # DM
+    user11 = CUser(name='user11', email='user11@dev', team=team1, team_join_time=datetime.now())
+    user11.save()
+    user4 = CUser(name='user4', email='user4@dev', team=team1, team_join_time=datetime.now())
+    user4.save()
+    user5 = CUser(name='user5', email='user5@dev', team=team1, team_join_time=datetime.now())
+    user5.save()
+    # delete 2
+    assert CUser.delete_many({'name': {'$regex': re.compile('^user1')}}) == 2
+    # delete first
+    assert CUser.delete_many({'name': 'user3'}) == 1
+    # delete last
+    assert CUser.delete_many({'name': 'user5'}) == 1
+    # only remains user 4
+    assert CUser.count() == 1

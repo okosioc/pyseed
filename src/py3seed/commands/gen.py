@@ -19,7 +19,7 @@ import sys
 from typing import List
 
 from flask import request
-from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader
+from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader, filters
 from werkzeug.urls import url_quote, url_encode
 
 from py3seed import registered_models, BaseModel, TemplateError, LayoutError
@@ -33,11 +33,16 @@ def _prepare_jinja2_env():
     """ Prepare env for rendering jinja2 templates. """
     #
     # For more env setting, please refer to https://jinja.palletsprojects.com/en/3.0.x/api/#jinja2.Environment
-    #   trim_blocks=True, the first newline after a block is removed (block, not variable tag!)
-    #   lstrip_blocks=True, leading spaces and tabs are stripped from the start of a line to a block
-    #   keep_trailing_newline=True, Preserve the trailing newline when rendering templates.
+    # - trim_blocks=True, the first newline after a block is removed (block, not variable tag!)
+    # - lstrip_blocks=True, leading spaces and tabs are stripped from the start of a line to a block
+    # - keep_trailing_newline=True, Preserve the trailing newline when rendering templates
     #
-    env = Environment(trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True)
+    # trim_blocks=True and lstrip_blocks=True -> make sure lines of {% ... %} and {# ... #} will be removed completely in render result
+    # keep_trailing_newline=True -> keep trailing newline to so that you can use indent filter to include the macro with a tailing newline
+    #
+    # For extension, plrease refer to https://jinja.palletsprojects.com/en/3.0.x/extensions/#loopcontrols-extension
+    #
+    env = Environment(trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True, extensions=['jinja2.ext.loopcontrols'])
 
     def split(value, separator):
         """ Split a string. """
@@ -66,12 +71,21 @@ def _prepare_jinja2_env():
         """ Url Quote. """
         return url_quote(value, charset)
 
+    def right(s: str, width: int = 4):
+        """ Do indent, if content is not blank, add leading indent. """
+        s = filters.do_indent(s, width)
+        if s:
+            s = " " * width + s
+        #
+        return s
+
     env.filters['split'] = split
     env.filters['items'] = items
     env.filters['keys'] = keys
     env.filters['quote'] = quote
     env.filters['basename'] = basename
     env.filters['urlquote'] = urlquote
+    env.filters['right'] = right
 
     def update_query(**new_values):
         """ Update query. """

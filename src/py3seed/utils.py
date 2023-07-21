@@ -150,7 +150,7 @@ def parse_layout(body, schema):
 
     def _parse_lines(level, _lines, _schema):
         """ Recursively parse lines. """
-        leading = '-' * ((level + 1) * 2)  # 2 spaces for each level
+        leading = '- ' * (level + 1)  # 2 spaces for each level
         # logger.debug('Parse lines:\n' + '\n'.join(_lines))
         _rows = []
         # Get the indexes of lines that has same indent with first line
@@ -333,18 +333,30 @@ def parse_layout(body, schema):
 
 def get_layout_fields(layout):
     """ Do not recursively parse inner object/array, only return current level field names. """
+    if not layout:
+        return []
+    #
     for row in layout:
         for col in row:
             col_name = col['name']
+            # NOTE: Ignore the groups with summary format, because they are used for reference only
+            # e.g,
+            # - 1#summary4 is used to display a summary card of current object
+            # - project#summary4 is used to display a summary card of a related object or inner object
+            if col['format'] == Format.SUMMARY:
+                continue
+            # Blank column
             if not col_name:
                 pass
+            # Hyphen column
             elif col_name == '-':
                 pass
+            # Group column
             elif col_name.replace('.', '').isdigit():
                 yield from get_layout_fields(col['rows'])
             else:
                 # Return current level field names, do not recursively parse inner object/array
-                yield {k: col[k] for k in ('name', 'format', 'span', 'params')}
+                yield col_name
 
 
 class Pagination(object):

@@ -11,14 +11,15 @@
 from py3seed import DataError, BaseModel, Pagination, inflection
 
 # {model_name:[dict]}
-# Note: Do no store model object directly, as it may cause concurrent accessing issue
+# Note: Do no store model object directly but parsed dict object, as it may cause concurrent accessing issue
 CACHES = {}
 
 
 class CacheModel(BaseModel):
     """ Model in cache. """
-    # TODO: Support __keys__ to mark the key field to be unique
-    __keys__ = []
+    # a user-friendly unique field name
+    # NOTE: this field should be reqired
+    __key__ = None
 
     # id field definition
     __id_name__ = 'id'
@@ -143,11 +144,22 @@ class CacheModel(BaseModel):
     @classmethod
     def delete_many(cls, filter_=None, **kwargs):
         collection = cls.get_collection(**kwargs)
-        indexes = [index for index, record in enumerate(collection) if cls.match_record(record, filter_)]
-        for index in indexes:
-            del collection[index]
+        start = 0
+        count = 0
+        while start < len(collection):
+            found = -1
+            for i, record in enumerate(collection, start):
+                if cls.match_record(record, filter_):
+                    found = i
+                    break
+            #
+            if found >= 0:
+                del collection[found]
+                count += 1
+            else:
+                start = len(collection)
         #
-        return True
+        return count
 
     #
     #
@@ -165,12 +177,28 @@ class CacheModel(BaseModel):
         if insert_with_id or not self.id:
             # get the max id, start from 1
             self.id = max(list(map(lambda x: x['id'], collection)) or [0]) + 1
+            # check duplicated key value
+            if self.__key__:
+                key = self.__key__
+                key_value = getattr(self, key)
+                existing = next((record for record in collection if record[key] == key_value), None)
+                if existing:
+                    raise DataError(f'Duplicate key value: {key_value}')
+            #
             collection.append(self.dict())
             return True
         else:
-            indexes = [index for index, record in enumerate(collection) if record['id'] == self.id]
-            if indexes:
-                collection[indexes[0]] = self.dict()
+            index = next((index for index, record in enumerate(collection) if record['id'] == self.id), -1)
+            if index >= 0:
+                # check duplicated key value
+                if self.__key__:
+                    key = self.__key__
+                    key_value = getattr(self, key)
+                    existing = next((record for record in collection if record['id'] != self.id and record[key] == key_value), None)
+                    if existing:
+                        raise DataError(f'Duplicate key value: {key_value}')
+                #
+                collection[index] = self.dict()
                 return True
             else:
                 return False
@@ -178,9 +206,9 @@ class CacheModel(BaseModel):
     def delete(self, **kwargs):
         """ Delete self form cache. """
         collection = self.get_collection(**kwargs)
-        indexes = [index for index, record in enumerate(collection) if record['id'] == self.id]
-        if indexes:
-            del collection[indexes[0]]
+        index = next((index for index, record in enumerate(collection) if record['id'] == self.id), -1)
+        if index >= 0:
+            del collection[index]
             return True
         else:
             return False

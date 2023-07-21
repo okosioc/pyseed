@@ -13,7 +13,7 @@ import os
 import pytest
 
 from py3seed import LayoutError
-from py3seed.utils import parse_layout
+from py3seed.utils import parse_layout, get_layout_fields
 from py3seed.commands.gen import _gen
 from .core.models import User, Team
 
@@ -92,6 +92,7 @@ def test_layout_parsing():
     assert first_row[1]['rows'][4][0]['name'] == 'point'
     assert first_row[1]['rows'][4][0]['span'] == 4
     assert first_row[1]['rows'][4][1]['name'] == ''
+    assert list(get_layout_fields(layout['rows'])) == ['name', 'phone', 'intro', 'avatar', 'point']
 
     # Team member layout
     layout = parse_layout(team_members_layout, team_schema)
@@ -101,7 +102,6 @@ def test_layout_parsing():
     assert first_row[0]['format'] == 'summary'
     assert len(first_row[1]['rows'][0]) == 7
     assert first_row[1]['rows'][0][0]['name'] == 'avatar'
-
 
 
 def test_gen():
