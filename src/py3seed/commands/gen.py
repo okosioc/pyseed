@@ -27,6 +27,7 @@ from py3seed.utils import work_in, generate_names, get_layout_fields, parse_layo
 from py3seed.merge3 import Merge3
 
 logger = logging.getLogger('pyseed')
+INCLUDES_FOLDER = '__includes'
 
 
 def _prepare_jinja2_env():
@@ -122,19 +123,28 @@ def _prepare_jinja2_env():
         """
         return list(get_layout_fields(layout))
 
+    def exists(path):
+        """ Check if path exists. """
+        # Only support FileSystemLoader which has a searchpath
+        if not isinstance(env.loader, FileSystemLoader):
+            return False
+        #
+        fp = os.path.join(env.loader.searchpath[0], path)
+        return os.path.exists(fp)
+
     env.globals['update_query'] = update_query
     env.globals['new_model'] = new_model
     env.globals['match_field'] = match_field
     env.globals['parse_layout_fields'] = parse_layout_fields
+    env.globals['exists'] = exists
     #
     return env
 
 
-def _gen(ms: str, ds: str):
+def _gen(ds: str = None):
     """ Gen. """
-    include_models = [m.strip() for m in ms.split(',')] if ms else []
     include_domains = [d.strip() for d in ds.split(',')] if ds else []
-    logger.info(f'Gen for domain(s) {include_models} under domain(s) {include_domains}')
+    logger.info(f'Gen under domain(s) {include_domains}')
     # Domains should be project folders, i.e, [www, miniapp, android, ios, ...]
     for d in include_domains:
         if not os.path.exists(d):
@@ -215,10 +225,6 @@ def _gen(ms: str, ds: str):
                 continue
             #
             model_setting['views'] = views
-            # Filter model if include_models has value
-            if include_models and include_models.count(model_name) == 0:  # case-sensitive
-                continue
-            #
             model_settings[model_name] = model_setting
     #
     if not model_settings:
@@ -302,14 +308,13 @@ def _recursive_render(t_base, o_base, name, context, env):
       {{blueprint}}
       {{#views}}
       {{view}}
-      {{#seeds}}
-      {{seed}}
       {{#models}}
       {{model}}
     """
     t_path = os.path.join(t_base, name)
     t_name = ''.join(name.split())  # Remove all the whitespace chars from name
     out_names = [t_name]  # if no matched list or varible syntax, process directly
+    logger.debug(f'Render {t_path} -> {out_names}')
     out_key, out_values = None, []
     #
     # Check list syntax, i.e, {{#name}}
@@ -327,17 +332,11 @@ def _recursive_render(t_base, o_base, name, context, env):
             out_key = '__view'
             out_values = context['__blueprint']['views']  # views under current blueprint
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
-        elif key == 'seeds':
-            out_key = '__seed'
-            # seeds can be accessed at context level, which means it can be used in different views, there is another way to access seed, that is blueprint->view->seed, we often use it generate backend logic
-            # NOTE: do NOT render the seeds having alphanumeric suffix, e.g, Block-read-features-basic, Block-read-shop-products-grid
-            out_values = [s for s in context['seeds'] if not s.get('suffix')]
-            out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'models':
             out_key = '__model'
             # models can be accessed at context level, NOTE: models is dict, {name: {names, schema}}}, so we use values() here
             out_values = list(context['models'].values())
-            # names of blueprints/views/seeds are kebab formats because them will be used in the url directly, while modal names are always in camel case because of PEP8
+            # names of blueprints/views are kebab formats because them will be used in the url directly, while modal names are always in camel case because of PEP8
             out_names = [t_name.replace(syntax, v['name_kebab']) for v in out_values]
         else:
             raise TemplateError(f'Unsupported list syntax: {syntax}')
@@ -350,7 +349,7 @@ def _recursive_render(t_base, o_base, name, context, env):
         if match_variable:
             syntax = match_list.group(1)
             key = syntax[2:-2]
-            if key in ['blueprint', 'view', 'seed']:
+            if key in ['blueprint', 'view']:
                 out_key == f'__{key}'
                 out_values = [context[f'__{key}']]
                 out_names = [t_name.replace(syntax, v['name']) for v in out_values]
@@ -376,12 +375,23 @@ def _recursive_render(t_base, o_base, name, context, env):
             o_path = os.path.join(o_base, o_name)
             if not os.path.exists(o_path):
                 os.mkdir(o_path)
+            # if output is not the same as template, need to copy includes folder
+            t_includes = os.path.join(t_path, INCLUDES_FOLDER)
+            o_includes = os.path.join(o_path, INCLUDES_FOLDER)
+            if t_path != o_path  and os.path.exists(t_includes):
+                logger.debug(f'Copy {t_includes} -> {o_includes}')
+                shutil.copytree(t_includes, o_includes)
             # Can use this context value in sub folders and files
             if out_values:
                 context[out_key] = out_values[i]
             # Render recursively
-            for d in sorted(os.listdir(t_path)):
-                _recursive_render(t_path, o_path, d, context, env)
+            for f in sorted(os.listdir(t_path)):
+                # Only process files
+                if os.path.isfile(os.path.join(t_path, f)):
+                    _recursive_render(t_path, o_path, f, context, env)
+            #
+            if os.path.exists(o_includes):
+                shutil.rmtree(o_includes)
     #
     # Render file
     #
@@ -391,23 +401,26 @@ def _recursive_render(t_base, o_base, name, context, env):
             return
         # Overwrite with template file content firstly
         # e.g,
-        #  1. Files that has list or varible syntax, regenerate each time; The jinjas generated should be removed after generation
-        #  www/templates/public/{{#views}}.html.jinja2
+        # 1. Files that has list or varible syntax, regenerate each time; The jinjas generated should be removed after generation
+        #    www/templates/{{#blueprints}}/{{#views}}.html.jinja2
         #    ->
         #    www/templates/public/user-profile.html.jinja2
         #    www/templates/public/team-members.html.jinja2
         #    ...
-        #  2. Files that is just a jinja, no need to overwrite just render directly; The jinja file should NOT be removed after generation
-        #  www/static/js/enums.js.jinja2
+        # 2. Files that is just a jinja, no need to overwrite just render directly; The jinja file should NOT be removed after generation
+        #    www/static/js/enums.js.jinja2
         for o_name in out_names:
             o_path = os.path.join(o_base, o_name)
-            if out_key:  # out_key is not None means it has list or varible syntax
+            # Only two cases
+            # - name has list/var syntax, e.g, www/views/public/{{#views}}.html.jinja2
+            # - name has not list/var syntax but parent folder has, e.g, www/templates/{{#blueprints}}/env.txt.jinja2
+            if t_path != o_path:
+                logger.debug(f'Copy {t_path} to {o_path}')
                 shutil.copyfile(t_path, o_path)
-                shutil.copymode(t_path, o_path)
         # Change working folder to ., so that jinja2 works ok
-        o_base = os.path.abspath(o_base)
-        with work_in(o_base):
-            logger.info(f'Working at {o_base}')
+        abs_o_base = os.path.abspath(o_base)
+        with work_in(abs_o_base):
+            logger.info(f'Working at {abs_o_base}')
             # Set jinja2's path
             env.loader = FileSystemLoader('.')
             o_context = {k: v for k, v in context.items() if not k.startswith('__')}
@@ -491,22 +504,13 @@ def _recursive_render(t_base, o_base, name, context, env):
                         # Remove .11
                         os.remove(o_file_11)
                 # Remove template file
-                if out_key:
+                if t_path != os.path.join(o_base, o_name):
                     os.remove(o_name)
 
 
 def main(args: List[str]) -> bool:
     """ Main. """
     parser = argparse.ArgumentParser(prog="pyseed gen")
-    parser.add_argument(
-        '-m',
-        nargs='?',
-        metavar='models',
-        default=None,
-        help='Tells pyseed to generate action for specific models.'
-             'e.g,'
-             '-m User means generating all views for User model'
-    )
     parser.add_argument(
         '-d',
         nargs='?',
@@ -518,4 +522,4 @@ def main(args: List[str]) -> bool:
              '-m User -d www means generating all views for User model under www domain'
     )
     parsed_args = parser.parse_args(args)
-    return _gen(parsed_args.m, parsed_args.d)
+    return _gen(parsed_args.d)

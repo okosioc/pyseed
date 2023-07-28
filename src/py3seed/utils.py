@@ -181,12 +181,11 @@ def parse_layout(body, schema):
             # Cut inner layout
             #
             if len(segment) > 1:
-                # logger.debug(f'{leading} Parsing level {level} segment:\n' + '\n'.join(segment))
+                # logger.debug(f'{leading}Parsing level {level} segment:\n' + '\n'.join(segment))
                 body_lines = segment[1:]
                 # Inject layout for each column
                 for j in range(0, len(columns)):
                     column = columns[j]
-                    col_name = column['name']
                     start_position = index_line.index(column['raw'])
                     if j < len(columns) - 1:
                         end_position = index_line.index(columns[j + 1]['name'])
@@ -207,7 +206,7 @@ def parse_layout(body, schema):
                 col_name = column['name']
                 #
                 col_lines = column.get('lines', None)
-                logger.debug(f'{leading} Column ({i},{j}): {col_name}' + (('\n' + '\n'.join(col_lines)) if col_lines else ''))
+                logger.debug(f'{leading}Column ({i},{j}): {col_name}' + (('\n' + '\n'.join(col_lines)) if col_lines else ''))
                 #
                 # Column name possible values:
                 # 1) blank column prints only a placeholder
@@ -259,6 +258,7 @@ def parse_layout(body, schema):
             'raw': column_str,
             'format': None,
             'span': None,
+            'params': {},
         }
         # Parse span at the end, e.g, a?param=1#summary4
         format_span_match = FORMAT_SPAN_REGEX.match(column_str)

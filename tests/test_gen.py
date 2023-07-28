@@ -154,7 +154,7 @@ def test_gen():
     #
     # Generate
     #
-    _gen(None, None)
+    _gen()
     #
     # Test Cases
     #
@@ -223,3 +223,6 @@ UserStatus: {'normal': 'Normal', 'rejected': 'Rejected'},
 UserRole: {1: 'Member', 2: 'Editor', 9: 'Admin'},
 }
 '''
+    # global functions
+    env_txt = open('www/templates/public/env.txt', encoding='utf-8').read()
+    assert 'iamhere.html: True' in env_txt
