@@ -63,17 +63,14 @@ class Team(MongoModel):
     #
     __icon__ = 'users'
     __views__ = {
-        'team-members': {
-            'domains': ['www'],
-            'layout': '''#!read?title=Members
-                1#summary4,    members#8                                                  
-                  logo           avatar, name, status, roles, email, phone, team_join_time
-                  name
-                  phone                                                              
-                  members                                                                 
-                  create_time
-            ''',
-        },
+        'www|miniapp://team-members': '''#!read?title=Members
+            1#summary4,    members#8                                                  
+              logo           avatar, name, status, roles, email, phone, team_join_time
+              name
+              phone                                                              
+              members                                                                 
+              create_time
+        ''',
     }
 
 
@@ -116,17 +113,14 @@ class User(MongoModel):
 
     __indexes__ = [{'fields': ['email'], 'unique': True}]
     __views__ = {
-        'profile': {
-            'domains': ['www'],
-            'layout': '''#!form?title=User
-                1#summary4,    2#8                                           
-                  avatar         name  
-                  name           phone                                                  
-                  status         intro                                                 
-                  roles          avatar                                                
-                  email        
-                  phone        
-                  create_time  
-            '''
-        },
+        'www|miniapp://profile': '''#!form?title=User
+            1#summary4,    2#8                                           
+              avatar         name  
+              name           phone                                                  
+              status         intro                                                 
+              roles          avatar                                                
+              email        
+              phone        
+              create_time  
+        ''',
     }

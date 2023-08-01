@@ -45,6 +45,56 @@ def _prepare_jinja2_env():
     #
     env = Environment(trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True, extensions=['jinja2.ext.loopcontrols'])
 
+    def update_query(**new_values):
+        """ Update query. """
+        args = request.args.copy()
+        for key, value in new_values.items():
+            args[key] = value
+        return url_encode(args)
+
+    def new_model(class_name):
+        """ New a model by class name. """
+        klass = globals()[class_name]
+        return klass()
+
+    def match_field(fields_, matcher):
+        """ Get the first matching field from columns.
+        e.g,
+        - match_field(columns, 'name|title|\\w+_name')
+        """
+        matcher = re.compile(matcher if matcher.startswith('(') else f'({matcher})')
+        if isinstance(fields_, dict):
+            fields_ = fields_.keys()
+        #
+        for f in fields_:
+            if matcher.match(f):
+                return f
+        # If no matching, return nothing
+        return None
+
+    def parse_layout_fields(layout):
+        """ Get layout fields.
+
+        each column in layout can be blank('')/hyphen(-)/group(integer&float)/field(string) suffixed with query and format-span string
+        this function will return a list of field names.
+        """
+        return list(get_layout_fields(layout))
+
+    def exists(path):
+        """ Check if path exists. """
+        # Only support FileSystemLoader which has a searchpath
+        if not isinstance(env.loader, FileSystemLoader):
+            return False
+        #
+        fp = os.path.join(env.loader.searchpath[0], path)
+        return os.path.exists(fp)
+
+    env.globals['update_query'] = update_query
+    env.globals['new_model'] = new_model
+    env.globals['match_field'] = match_field
+    env.globals['parse_layout_fields'] = parse_layout_fields
+    env.globals['exists'] = exists
+
     def split(value, separator):
         """ Split a string. """
         return value.split(separator)
@@ -76,9 +126,35 @@ def _prepare_jinja2_env():
         """ Do indent, if content is not blank, add leading indent. """
         s = filters.do_indent(s, width)
         if s:
-            s = " " * width + s
+            s = ' ' * width + s
         #
         return s
+
+    def last_name(path):
+        """ Get last name from path, e.g, user.name -> name, user -> user. """
+        return path.split('.')[-1]
+
+    def fields(layout_or_schema, matcher=None):
+        """ Get the matched fields from layout or schema. """
+        if isinstance(layout_or_schema, list):  # layout is [[{}, ...], ...]
+            _fields = parse_layout_fields(layout_or_schema)
+        elif isinstance(layout_or_schema, dict):  # schema is dict {type: 'object', properties: {name, type, ... }}
+            _fields = list(layout_or_schema['properties'].keys())
+        else:
+            raise ValueError(f'Unsupported type to calculate fields: {type(layout_or_schema)}')
+        #
+        if matcher:
+            # NOTE: in jinja2, you need to escape regex str, e.g, \w -> \\w
+            # e.g, {{ set title_fields = layout|fields('title|name|\\w*name') }}
+            matcher = re.compile(matcher if matcher.startswith('(') else f'({matcher})')
+            return [f for f in _fields if matcher.match(f)]
+        else:
+            return _fields
+
+    def field(layout_or_schema, matcher=None):
+        """ Get the first matched field from layout or schema. """
+        fields_ = fields(layout_or_schema, matcher)
+        return fields_[0] if fields_ else None
 
     env.filters['split'] = split
     env.filters['items'] = items
@@ -87,56 +163,9 @@ def _prepare_jinja2_env():
     env.filters['basename'] = basename
     env.filters['urlquote'] = urlquote
     env.filters['right'] = right
-
-    def update_query(**new_values):
-        """ Update query. """
-        args = request.args.copy()
-        for key, value in new_values.items():
-            args[key] = value
-        return url_encode(args)
-
-    def new_model(class_name):
-        """ New a model by class name. """
-        klass = globals()[class_name]
-        return klass()
-
-    def match_field(fields, matcher):
-        """ Get the first matching field from columns.
-        e.g,
-        - match_field(columns, 'name|title|\\w+_name')
-        """
-        matcher = re.compile(matcher if matcher.startswith('(') else f'({matcher})')
-        if isinstance(fields, dict):
-            fields = fields.keys()
-        #
-        for f in fields:
-            if matcher.match(f):
-                return f
-        # If no matching, return nothing
-        return None
-
-    def parse_layout_fields(layout):
-        """ Get layout fields.
-
-        each column in layout can be blank('')/hyphen(-)/group(integer&float)/field(string) suffixed with query and format-span string
-        this function will return a list of field names.
-        """
-        return list(get_layout_fields(layout))
-
-    def exists(path):
-        """ Check if path exists. """
-        # Only support FileSystemLoader which has a searchpath
-        if not isinstance(env.loader, FileSystemLoader):
-            return False
-        #
-        fp = os.path.join(env.loader.searchpath[0], path)
-        return os.path.exists(fp)
-
-    env.globals['update_query'] = update_query
-    env.globals['new_model'] = new_model
-    env.globals['match_field'] = match_field
-    env.globals['parse_layout_fields'] = parse_layout_fields
-    env.globals['exists'] = exists
+    env.filters['last_name'] = last_name
+    env.filters['fields'] = fields
+    env.filters['field'] = field
     #
     return env
 
@@ -181,8 +210,13 @@ def _gen(ds: str = None):
             #
             views = []
             for k, v in model_class.__views__.items():
+                # k has format domains://name, domains are sperated by |, e.g, www|miniapp://index
+                if '//' not in k:
+                    logger.error(f'View name {k} for model {model_name} is not valid, should be domains://name')
+                    return False
+                domains, name = k.split('://')
+                domains = [d.strip() for d in domains.split('|')]
                 # Filter views if include_domains has value
-                domains = v['domains']
                 if include_domains:
                     domains = [d for d in domains if d in include_domains]
                 #
@@ -194,13 +228,12 @@ def _gen(ds: str = None):
                 # e.g,
                 # - index -> blueprint = public, name = index
                 # - admin/dashboard -> blueprint = admin, name = dashboard
-                if '/' in k:
-                    blueprint, name = k.split('/')
+                if '/' in name:
+                    blueprint, name = name.split('/')
                 else:
                     blueprint = 'public'
-                    name = k
                 #
-                layout = v['layout'].strip()
+                layout = v
                 logger.info(f'- {blueprint}/{name}: {layout}')
                 # Validate to make sure view name is unique
                 if name in view_names:
@@ -217,7 +250,7 @@ def _gen(ds: str = None):
                     'action': l['action'],
                     'params': l['params'],
                     'rows': l['rows'],
-                    'layout': layout,
+                    'layout': layout,  # NOTE: layout stores the original layout string, parsed layout is stored in rows
                     **generate_names(name)
                 })
             # Views may be empty if no views match
@@ -285,7 +318,7 @@ def _gen(ds: str = None):
             for v in bp['views']:  # Views
                 v_name = v['name']
                 logger.info(f'  {v_name}')
-        #
+        # models & blueprints can be used in all templates
         context = {
             'models': model_settings,
             'blueprints': blueprints,
@@ -315,6 +348,7 @@ def _recursive_render(t_base, o_base, name, context, env):
     t_name = ''.join(name.split())  # Remove all the whitespace chars from name
     out_names = [t_name]  # if no matched list or varible syntax, process directly
     logger.debug(f'Render {t_path} -> {out_names}')
+    # For each value v in out_values, will put v into context using out_key
     out_key, out_values = None, []
     #
     # Check list syntax, i.e, {{#name}}
@@ -325,15 +359,17 @@ def _recursive_render(t_base, o_base, name, context, env):
         syntax = match_list.group(1)  # => {{#views}}
         key = syntax[3:-2]  # => views
         if key == 'blueprints':
-            out_key = '__blueprint'
+            out_key = 'blueprint'
+            # blueprints can be access at context level
             out_values = context['blueprints']
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'views':
-            out_key = '__view'
-            out_values = context['__blueprint']['views']  # views under current blueprint
+            out_key = 'view'
+            # views under current blueprint
+            out_values = context['blueprint']['views']
             out_names = [t_name.replace(syntax, v['name']) for v in out_values]
         elif key == 'models':
-            out_key = '__model'
+            out_key = 'model'
             # models can be accessed at context level, NOTE: models is dict, {name: {names, schema}}}, so we use values() here
             out_values = list(context['models'].values())
             # names of blueprints/views are kebab formats because them will be used in the url directly, while modal names are always in camel case because of PEP8
@@ -350,12 +386,13 @@ def _recursive_render(t_base, o_base, name, context, env):
             syntax = match_list.group(1)
             key = syntax[2:-2]
             if key in ['blueprint', 'view']:
-                out_key == f'__{key}'
-                out_values = [context[f'__{key}']]
+                out_key = key
+                out_values = [context[out_key]]
                 out_names = [t_name.replace(syntax, v['name']) for v in out_values]
             elif key in ['model']:
-                out_key == f'__{key}'
-                out_values = [context[f'__{key}']]
+                out_key = key
+                out_values = [context[out_key]]
+                # Output folder/file names are in kebab format, but not camel case
                 out_names = [t_name.replace(syntax, v['name_kebab']) for v in out_values]
             else:
                 raise TemplateError(f'Unsupported varible syntax: {syntax}')
@@ -378,17 +415,20 @@ def _recursive_render(t_base, o_base, name, context, env):
             # if output is not the same as template, need to copy includes folder
             t_includes = os.path.join(t_path, INCLUDES_FOLDER)
             o_includes = os.path.join(o_path, INCLUDES_FOLDER)
-            if t_path != o_path  and os.path.exists(t_includes):
+            if t_path != o_path and os.path.exists(t_includes):
                 logger.debug(f'Copy {t_includes} -> {o_includes}')
-                shutil.copytree(t_includes, o_includes)
-            # Can use this context value in sub folders and files
-            if out_values:
+                shutil.copytree(t_includes, o_includes, dirs_exist_ok=True)
+            # Can use this context value for inner templates
+            if out_key:
                 context[out_key] = out_values[i]
             # Render recursively
             for f in sorted(os.listdir(t_path)):
                 # Only process files
                 if os.path.isfile(os.path.join(t_path, f)):
                     _recursive_render(t_path, o_path, f, context, env)
+            # Remove out_key from context
+            if out_key:
+                del context[out_key]
             #
             if os.path.exists(o_includes):
                 shutil.rmtree(o_includes)
@@ -423,7 +463,6 @@ def _recursive_render(t_base, o_base, name, context, env):
             logger.info(f'Working at {abs_o_base}')
             # Set jinja2's path
             env.loader = FileSystemLoader('.')
-            o_context = {k: v for k, v in context.items() if not k.startswith('__')}
             #
             for i, o_name in enumerate(out_names):
                 o_file_raw = o_name.replace('.jinja2', '')
@@ -453,16 +492,15 @@ def _recursive_render(t_base, o_base, name, context, env):
                         continue
                     # THIS, copy from exsiting file
                     shutil.copyfile(o_file_raw, o_file_11)
-                    shutil.copymode(o_file_raw, o_file_11)
                     # OTHER, newly genearted file
                     o_file = o_file_111
                 else:
                     o_file = o_file_raw
                 #
                 logger.info(f'Render {o_file}')
-                # Remove __ so that object can be accessed in template
+                # Push current key to context
                 if out_key:
-                    o_context[out_key[2:]] = out_values[i]
+                    context[out_key] = out_values[i]
                 #
                 # Render file
                 #
@@ -472,7 +510,7 @@ def _recursive_render(t_base, o_base, name, context, env):
                     exception.translated = False
                     raise
                 #
-                rendered = tmpl.render(**o_context)
+                rendered = tmpl.render(**context)
                 with open(o_file, 'w', encoding='utf-8') as f:
                     f.write(rendered)
                 #
@@ -503,6 +541,9 @@ def _recursive_render(t_base, o_base, name, context, env):
                         os.rename(o_file_111, o_file_1)
                         # Remove .11
                         os.remove(o_file_11)
+                # Remove out_key from context
+                if out_key:
+                    del context[out_key]
                 # Remove template file
                 if t_path != os.path.join(o_base, o_name):
                     os.remove(o_name)
