@@ -63,7 +63,7 @@ class Team(MongoModel):
     #
     __icon__ = 'users'
     __views__ = {
-        'www|miniapp://team-members': '''#!read?title=Members
+        'www://team-members': '''#!read?title=Members
             1#summary4,    members#8                                                  
               logo           avatar, name, status, roles, email, phone, team_join_time
               name
@@ -113,7 +113,7 @@ class User(MongoModel):
 
     __indexes__ = [{'fields': ['email'], 'unique': True}]
     __views__ = {
-        'www|miniapp://profile': '''#!form?title=User
+        'www://profile': '''#!form?title=User
             1#summary4,    2#8                                           
               avatar         name  
               name           phone                                                  

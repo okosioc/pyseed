@@ -36,14 +36,13 @@ def _prepare_jinja2_env():
     # For more env setting, please refer to https://jinja.palletsprojects.com/en/3.0.x/api/#jinja2.Environment
     # - trim_blocks=True, the first newline after a block is removed (block, not variable tag!)
     # - lstrip_blocks=True, leading spaces and tabs are stripped from the start of a line to a block
-    # - keep_trailing_newline=True, Preserve the trailing newline when rendering templates
     #
     # trim_blocks=True and lstrip_blocks=True -> make sure lines of {% ... %} and {# ... #} will be removed completely in render result
-    # keep_trailing_newline=True -> keep trailing newline to so that you can use indent filter to include the macro with a tailing newline
     #
-    # For extension, plrease refer to https://jinja.palletsprojects.com/en/3.0.x/extensions/#loopcontrols-extension
+    # For extension loopcontrols, please refer to https://jinja.palletsprojects.com/en/3.0.x/extensions/#loopcontrols-extension
+    # -> you can use break, continue in for loop
     #
-    env = Environment(trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True, extensions=['jinja2.ext.loopcontrols'])
+    env = Environment(trim_blocks=True, lstrip_blocks=True, extensions=['jinja2.ext.loopcontrols'])
 
     def update_query(**new_values):
         """ Update query. """
@@ -57,29 +56,6 @@ def _prepare_jinja2_env():
         klass = globals()[class_name]
         return klass()
 
-    def match_field(fields_, matcher):
-        """ Get the first matching field from columns.
-        e.g,
-        - match_field(columns, 'name|title|\\w+_name')
-        """
-        matcher = re.compile(matcher if matcher.startswith('(') else f'({matcher})')
-        if isinstance(fields_, dict):
-            fields_ = fields_.keys()
-        #
-        for f in fields_:
-            if matcher.match(f):
-                return f
-        # If no matching, return nothing
-        return None
-
-    def parse_layout_fields(layout):
-        """ Get layout fields.
-
-        each column in layout can be blank('')/hyphen(-)/group(integer&float)/field(string) suffixed with query and format-span string
-        this function will return a list of field names.
-        """
-        return list(get_layout_fields(layout))
-
     def exists(path):
         """ Check if path exists. """
         # Only support FileSystemLoader which has a searchpath
@@ -91,8 +67,6 @@ def _prepare_jinja2_env():
 
     env.globals['update_query'] = update_query
     env.globals['new_model'] = new_model
-    env.globals['match_field'] = match_field
-    env.globals['parse_layout_fields'] = parse_layout_fields
     env.globals['exists'] = exists
 
     def split(value, separator):
@@ -134,10 +108,25 @@ def _prepare_jinja2_env():
         """ Get last name from path, e.g, user.name -> name, user -> user. """
         return path.split('.')[-1]
 
+    def match(values, matcher):
+        """ Get the first matching field from values.
+        e.g,
+        - values|match('name|title|\\w+_name')
+        """
+        matcher = re.compile(matcher if matcher.startswith('(') else f'({matcher})')
+        if isinstance(values, dict):
+            values = values.keys()
+        #
+        for v in values:
+            if matcher.match(v):
+                return v
+        # If no matching, return nothing
+        return None
+
     def fields(layout_or_schema, matcher=None):
         """ Get the matched fields from layout or schema. """
         if isinstance(layout_or_schema, list):  # layout is [[{}, ...], ...]
-            _fields = parse_layout_fields(layout_or_schema)
+            _fields = list(get_layout_fields(layout_or_schema))
         elif isinstance(layout_or_schema, dict):  # schema is dict {type: 'object', properties: {name, type, ... }}
             _fields = list(layout_or_schema['properties'].keys())
         else:
@@ -164,6 +153,7 @@ def _prepare_jinja2_env():
     env.filters['urlquote'] = urlquote
     env.filters['right'] = right
     env.filters['last_name'] = last_name
+    env.filters['match'] = match
     env.filters['fields'] = fields
     env.filters['field'] = field
     #
@@ -211,7 +201,7 @@ def _gen(ds: str = None):
             views = []
             for k, v in model_class.__views__.items():
                 # k has format domains://name, domains are sperated by |, e.g, www|miniapp://index
-                if '//' not in k:
+                if '://' not in k:
                     logger.error(f'View name {k} for model {model_name} is not valid, should be domains://name')
                     return False
                 domains, name = k.split('://')
@@ -233,7 +223,7 @@ def _gen(ds: str = None):
                 else:
                     blueprint = 'public'
                 #
-                layout = v
+                layout = v.strip()
                 logger.info(f'- {blueprint}/{name}: {layout}')
                 # Validate to make sure view name is unique
                 if name in view_names:
@@ -253,9 +243,6 @@ def _gen(ds: str = None):
                     'layout': layout,  # NOTE: layout stores the original layout string, parsed layout is stored in rows
                     **generate_names(name)
                 })
-            # Views may be empty if no views match
-            if not views:
-                continue
             #
             model_setting['views'] = views
             model_settings[model_name] = model_setting
@@ -320,6 +307,7 @@ def _gen(ds: str = None):
                 logger.info(f'  {v_name}')
         # models & blueprints can be used in all templates
         context = {
+            'domain': domain,
             'models': model_settings,
             'blueprints': blueprints,
         }
@@ -347,7 +335,7 @@ def _recursive_render(t_base, o_base, name, context, env):
     t_path = os.path.join(t_base, name)
     t_name = ''.join(name.split())  # Remove all the whitespace chars from name
     out_names = [t_name]  # if no matched list or varible syntax, process directly
-    logger.debug(f'Render {t_path} -> {out_names}')
+    logger.debug(f'Process {t_path}')
     # For each value v in out_values, will put v into context using out_key
     out_key, out_values = None, []
     #
@@ -409,6 +397,7 @@ def _recursive_render(t_base, o_base, name, context, env):
             #     www/templates/dash
             #     www/templates/demo
             #     ...
+            logger.info(f'Render {o_name}')
             o_path = os.path.join(o_base, o_name)
             if not os.path.exists(o_path):
                 os.mkdir(o_path)

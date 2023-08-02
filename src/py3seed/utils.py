@@ -240,7 +240,7 @@ def parse_layout(body, schema):
                     if inner_schema:
                         # Inner layout is optional for inner object
                         if col_lines:
-                            column['rows'] = _parse_lines(level + 1, col_lines, inner_schema)  # Schema passing recursively should always be object
+                            column['rows'] = _parse_lines(level + 1, col_lines, inner_schema)  # Schema passing recursively should always be an object
                     else:
                         if col_lines:
                             raise LayoutError(f'{column_type.capitalize()} field {col_name} can not have inner layout')
