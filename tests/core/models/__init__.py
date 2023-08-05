@@ -114,7 +114,7 @@ class User(MongoModel):
     __indexes__ = [{'fields': ['email'], 'unique': True}]
     __views__ = {
         'www://profile': '''#!form?title=User
-            1#summary4,    2#8                                           
+            1#summary4,    2?title=User Info#8                                           
               avatar         name  
               name           phone                                                  
               status         intro                                                 

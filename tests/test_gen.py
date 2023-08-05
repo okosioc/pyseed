@@ -41,6 +41,12 @@ def test_layout_parsing():
           members                                                                   
           create_time  
     '''
+    team_members_layout_update = '''#!update?title=Team
+        logo
+        name, phone
+        members
+        remarks  
+    '''
     team_schema = Team.schema()
 
     #
@@ -71,6 +77,13 @@ def test_layout_parsing():
         )
     #
     assert 'phone can not have inner layout' in str(exc_info.value)
+    # Validate if back relation field can be updated
+    with pytest.raises(LayoutError) as exc_info:
+        parse_layout(
+            team_members_layout_update,
+            team_schema,
+        )
+    assert 'members is a back relation' in str(exc_info.value)
 
     #
     # Parsing

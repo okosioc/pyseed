@@ -148,7 +148,7 @@ def parse_layout(body, schema):
     }
     """
 
-    def _parse_lines(level, _lines, _schema):
+    def _parse_lines(level, _lines, _schema, _action):
         """ Recursively parse lines. """
         leading = '- ' * (level + 1)  # 2 spaces for each level
         # logger.debug('Parse lines:\n' + '\n'.join(_lines))
@@ -224,12 +224,20 @@ def parse_layout(body, schema):
                     if not col_lines:
                         raise LayoutError(f'Group {col_name} should have inner layout')
                     #
-                    column['rows'] = _parse_lines(level + 1, col_lines, _schema)
+                    column['rows'] = _parse_lines(level + 1, col_lines, _schema, _action)
                 else:
                     if col_name not in _schema['properties']:  # type of _schema is always a object
                         raise LayoutError(f'Field {col_name} not found in schema')
                     #
                     column_schema = _schema['properties'][col_name]
+                    if _action in ['create', 'update', 'upcreate']:
+                        # Can not edit back relation field as its value stores in counterpart
+                        if column_schema.get('is_back_relation', False):
+                            raise LayoutError(f'Field {col_name} is a back relation so can not be edited in {_action} action')
+                        # Can not edit non-editable field
+                        if not column_schema['editable']:
+                            raise LayoutError(f'Field {col_name} is not editable in {_action} action')
+                    #
                     column_type = column_schema['type']
                     inner_schema = None
                     if column_type == 'object':
@@ -240,7 +248,7 @@ def parse_layout(body, schema):
                     if inner_schema:
                         # Inner layout is optional for inner object
                         if col_lines:
-                            column['rows'] = _parse_lines(level + 1, col_lines, inner_schema)  # Schema passing recursively should always be an object
+                            column['rows'] = _parse_lines(level + 1, col_lines, inner_schema, _action)  # Schema passing recursively should always be an object
                     else:
                         if col_lines:
                             raise LayoutError(f'{column_type.capitalize()} field {col_name} can not have inner layout')
@@ -322,7 +330,7 @@ def parse_layout(body, schema):
         if '?' in action_str:
             action, params = _parse_query_str(action_str)
     #
-    rows = _parse_lines(0, lines, schema)
+    rows = _parse_lines(0, lines, schema, action)
     #
     return {
         'action': action,

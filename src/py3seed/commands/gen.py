@@ -36,13 +36,14 @@ def _prepare_jinja2_env():
     # For more env setting, please refer to https://jinja.palletsprojects.com/en/3.0.x/api/#jinja2.Environment
     # - trim_blocks=True, the first newline after a block is removed (block, not variable tag!)
     # - lstrip_blocks=True, leading spaces and tabs are stripped from the start of a line to a block
+    # - keep_trailing_newline=True, Preserve the trailing newline when rendering templates
     #
     # trim_blocks=True and lstrip_blocks=True -> make sure lines of {% ... %} and {# ... #} will be removed completely in render result
     #
-    # For extension loopcontrols, please refer to https://jinja.palletsprojects.com/en/3.0.x/extensions/#loopcontrols-extension
-    # -> you can use break, continue in for loop
+    # For extension, plrease refer to https://jinja.palletsprojects.com/en/3.0.x/extensions/
+    # - jinja2.ext.loopcontrols, add break and continue support in for loop
     #
-    env = Environment(trim_blocks=True, lstrip_blocks=True, extensions=['jinja2.ext.loopcontrols'])
+    env = Environment(trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True, extensions=['jinja2.ext.loopcontrols'])
 
     def update_query(**new_values):
         """ Update query. """
@@ -224,7 +225,7 @@ def _gen(ds: str = None):
                     blueprint = 'public'
                 #
                 layout = v.strip()
-                logger.info(f'- {blueprint}/{name}: {layout}')
+                logger.info(f'- {"|".join(domains)}://{blueprint}/{name}: {layout}')
                 # Validate to make sure view name is unique
                 if name in view_names:
                     logger.error(f'View name {v["name"]} is not unique')
@@ -397,7 +398,7 @@ def _recursive_render(t_base, o_base, name, context, env):
             #     www/templates/dash
             #     www/templates/demo
             #     ...
-            logger.info(f'Render {o_name}')
+            logger.info(f'Render {o_name}/')
             o_path = os.path.join(o_base, o_name)
             if not os.path.exists(o_path):
                 os.mkdir(o_path)
