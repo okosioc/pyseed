@@ -226,18 +226,15 @@ def parse_layout(body, schema):
                     #
                     column['rows'] = _parse_lines(level + 1, col_lines, _schema, _action)
                 else:
+                    # May need other validations:
+                    # - update a back relation field
+                    # - update a non-editable field
+                    # However, we do NOT do above validation here, as it depends on formats also
+                    # Some formats are used for display only, i.e, summary, so we do not need to validate the fields under a summary group
                     if col_name not in _schema['properties']:  # type of _schema is always a object
                         raise LayoutError(f'Field {col_name} not found in schema')
                     #
                     column_schema = _schema['properties'][col_name]
-                    if _action in ['create', 'update', 'upcreate']:
-                        # Can not edit back relation field as its value stores in counterpart
-                        if column_schema.get('is_back_relation', False):
-                            raise LayoutError(f'Field {col_name} is a back relation so can not be edited in {_action} action')
-                        # Can not edit non-editable field
-                        if not column_schema['editable']:
-                            raise LayoutError(f'Field {col_name} is not editable in {_action} action')
-                    #
                     column_type = column_schema['type']
                     inner_schema = None
                     if column_type == 'object':

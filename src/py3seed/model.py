@@ -696,6 +696,8 @@ class BaseModel(metaclass=ModelMeta):
     __icon__ = None
     __title__ = None
     __description__ = None
+    # When doing some logic that list models, e.g, drawing a table of users, we can use these columns to draw by default.
+    __columns__ = []
     # Views for this model, should be a dict
     # i.e,
     # {
@@ -1137,7 +1139,7 @@ class BaseModel(metaclass=ModelMeta):
         return []
 
     @classmethod
-    def schema(cls, layouts={}):
+    def schema(cls):
         """ To json schema dict.
 
         NOTE:
@@ -1277,6 +1279,7 @@ class BaseModel(metaclass=ModelMeta):
                 obj = {
                     'type': 'object',
                     'properties': properties,
+                    'columns': type_.__columns__,
                     'requires': requires,
                     'editable': True,
                     'py_type': type_.__name__,
@@ -1293,18 +1296,6 @@ class BaseModel(metaclass=ModelMeta):
                     'id_name': type_.__id_name__,
                     'id_type': type_.__id_type__.__name__ if type_.__id_type__ else None,
                 }
-                # Inject layouts into schema
-                if layouts:
-                    layout = layouts.get(type_.__name__, {})
-                    if not layout.get('columns'):
-                        layout['columns'] = obj['requires']
-                    if not layout.get('read'):
-                        # Each field is a row
-                        layout['read'] = [[{'name': f, 'params': {}}] for f in obj['properties'].keys()]
-                    if not layout.get('form'):
-                        layout['form'] = layout['read']
-                    #
-                    obj.update(layout)
                 #
                 return obj
             elif type_ is str:

@@ -43,8 +43,9 @@ def test_model():
     assert 'ip' in schema['properties']['logins']['items']['properties']
     assert 'title' in schema['properties']['posts']['items']['properties']
     assert schema['searchables'] == ['name__like', 'status']
-    #
     assert schema['properties']['team']['icon'] == 'users'
+    #
+    assert schema['columns'] == User.__columns__
     # Relation schema
     assert schema['relations'] == ['Team']
     assert 'is_out_relation' not in schema['properties']['sibling']

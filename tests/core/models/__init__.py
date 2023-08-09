@@ -112,6 +112,7 @@ class User(MongoModel):
     create_time: datetime = datetime.now
 
     __indexes__ = [{'fields': ['email'], 'unique': True}]
+    __columns__ = ['avatar', 'name', 'status', 'roles', 'email', 'phone', 'create_time']
     __views__ = {
         'www://profile': '''#!form?title=User
             1#summary4,    2?title=User Info#8                                           

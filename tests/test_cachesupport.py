@@ -90,6 +90,8 @@ def test_crud():
 
     # Q
     assert CUser.find_by_ids([1, 2])[1].name == user2.name
+    # projection
+    assert CUser.find({'name': 'user2'}, projection=['name'])[0] == {'id': 2, 'name': 'user2'}
 
     # D
     assert user2.delete()

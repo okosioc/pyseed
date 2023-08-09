@@ -75,6 +75,7 @@ class CacheModel(BaseModel):
         # sort, [(field, order)], order ASCENDING = 1, order DESCENDING = -1
         if 'sort' in kwargs:
             sort = kwargs['sort']
+            # Do not support multi key sorting
             if len(sort) > 1:
                 raise NotImplementedError(f'UNSUPPORTED sort: {sort}')
             #
@@ -84,7 +85,16 @@ class CacheModel(BaseModel):
         if 'skip' in kwargs:
             records = records[kwargs['skip']:kwargs['skip'] + kwargs['limit']]
         #
-        return [cls(r) for r in records]
+        ret = [cls(r) for r in records]
+        # projection, [field], used to specify a subset of fields that should be included in the result documents
+        if 'projection' in kwargs:
+            projection = kwargs['projection']
+            if cls.__id_name__ not in projection:
+                projection.insert(0, cls.__id_name__)
+            #
+            ret = list(map(lambda x: {k: getattr(x, k) for k in projection}, ret))
+        #
+        return ret
 
     @classmethod
     def count(cls, filter_=None, **kwargs):
