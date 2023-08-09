@@ -114,6 +114,9 @@ def _prepare_jinja2_env():
         e.g,
         - values|match('name|title|\\w+_name')
         """
+        if not values:
+            return None
+        #
         matcher = re.compile(matcher if matcher.startswith('(') else f'({matcher})')
         if isinstance(values, dict):
             values = values.keys()
@@ -124,12 +127,15 @@ def _prepare_jinja2_env():
         # If no matching, return nothing
         return None
 
-    def fields(layout_or_schema, matcher=None):
+    def fields(layout_or_schema, matcher=None, **kwargs):
         """ Get the matched fields from layout or schema. """
+        if not layout_or_schema:
+            return []
+        #
         if isinstance(layout_or_schema, list):  # layout is [[{}, ...], ...]
-            _fields = list(get_layout_fields(layout_or_schema))
+            _fields = list(get_layout_fields(layout_or_schema, **kwargs))
         elif isinstance(layout_or_schema, dict):  # schema is dict {type: 'object', properties: {name, type, ... }}
-            _fields = list(layout_or_schema['properties'].keys())
+            _fields = list(layout_or_schema['columns'])
         else:
             raise ValueError(f'Unsupported type to calculate fields: {type(layout_or_schema)}')
         #
@@ -466,24 +472,28 @@ def _recursive_render(t_base, o_base, name, context, env):
                 # user-profile.html.0 exists, always generate code to user-profile.html.0, then you need to merge manually
                 #
                 # - Output name with additional suffix .1:
-                # Using .1(BASE), .11(THIS) and .111(OTHER) to perform a 3-way merge
+                # Using BASE, THIS and OTHER to perform a 3-way merge
                 # e.g,
-                # user-profile.html.1 exists, coping user-profile.html as user-profile.html.11, generating user-profile.html.111, then perform 3-way merge to user-profile.html
+                # user-profile.html.1 exists, coping user-profile.html.1 to user-profile.html.BASE and user-profile.html to user-profile.html.THIS, generating user-profile.html.OTHER, then perform 3-way merge to user-profile.html
                 #
                 o_file_0 = o_name.replace('.jinja2', '.0')
                 o_file_1 = o_name.replace('.jinja2', '.1')
-                o_file_11 = o_name.replace('.jinja2', '.11')
-                o_file_111 = o_name.replace('.jinja2', '.111')
+                o_file_base = o_name.replace('.jinja2', '.BASE')
+                o_file_this = o_name.replace('.jinja2', '.THIS')
+                o_file_other = o_name.replace('.jinja2', '.OTHER')
                 if os.path.exists(o_file_0):
                     o_file = o_file_0
                 elif os.path.exists(o_file_1):
-                    if os.path.exists(o_file_111):
+                    # After manually merge, need to remove BASE/THIS/OTHER files mannually
+                    if os.path.exists(o_file_other):
                         logger.warning(f'Please solve last merging conflicts of {o_file_raw}')
                         continue
+                    # BASE, copy from .1
+                    shutil.copyfile(o_file_1, o_file_base)
                     # THIS, copy from exsiting file
-                    shutil.copyfile(o_file_raw, o_file_11)
+                    shutil.copyfile(o_file_raw, o_file_this)
                     # OTHER, newly genearted file
-                    o_file = o_file_111
+                    o_file = o_file_other
                 else:
                     o_file = o_file_raw
                 #
@@ -509,13 +519,13 @@ def _recursive_render(t_base, o_base, name, context, env):
                 if os.path.exists(o_file_1):
                     logger.info(f'Perform 3-way merge of {o_file_raw}')
                     # BASE
-                    with open(o_file_1, 'r', encoding='utf-8') as f:
+                    with open(o_file_base, 'r', encoding='utf-8') as f:
                         base = f.read().splitlines(True)
                     # THIS
-                    with open(o_file_11, 'r', encoding='utf-8') as f:
+                    with open(o_file_this, 'r', encoding='utf-8') as f:
                         this = f.read().splitlines(True)
                     # OTHER
-                    with open(o_file_111, 'r', encoding='utf-8') as f:
+                    with open(o_file_other, 'r', encoding='utf-8') as f:
                         other = f.read().splitlines(True)
                     #
                     m3 = Merge3(base, other, this)
@@ -523,14 +533,16 @@ def _recursive_render(t_base, o_base, name, context, env):
                     # print('\n'.join(m3.merge_annotated()))
                     with open(o_file_raw, 'w', encoding='utf-8') as f:
                         f.write(merged)
+                    # copy OTHER to .1, so that next time we can use it as BASE
+                    shutil.copyfile(o_file_other, o_file_1)
                     # Has conficts, need to solve manually
                     if '=======' in merged:
                         logger.warning(f'Please solve merging conflicts of {o_file_raw}')
                     else:
-                        # Rename .111 to .1 for next merging
-                        os.rename(o_file_111, o_file_1)
-                        # Remove .11
-                        os.remove(o_file_11)
+                        # Remove BASE/THIS/OTHER files
+                        os.remove(o_file_base)
+                        os.remove(o_file_this)
+                        os.remove(o_file_other)
                 # Remove out_key from context
                 if out_key:
                     del context[out_key]

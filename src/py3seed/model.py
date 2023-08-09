@@ -418,6 +418,8 @@ class ModelMeta(ABCMeta):
             if issubclass(base, BaseModel):  # True if base is BaseModel or its subclass
                 # BaseModel do not have __fields__
                 if base is not BaseModel:
+                    # Inherit the fields defined by the parent class
+                    # e.g, User is a subclass of MongoModel, the _id field defined in MongoModel must be accessible in User
                     fields.update(deepcopy(base.__fields__))
                 # Id field's type should be defined in MongoModel/CacheModel, so we need to fetch them from bases
                 if '__id_type__' not in namespace:
@@ -1279,7 +1281,7 @@ class BaseModel(metaclass=ModelMeta):
                 obj = {
                     'type': 'object',
                     'properties': properties,
-                    'columns': type_.__columns__,
+                    'columns': type_.__columns__ if type_.__columns__ else [f for f in properties.keys() if f != type_.__id_name__],
                     'requires': requires,
                     'editable': True,
                     'py_type': type_.__name__,

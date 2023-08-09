@@ -44,7 +44,6 @@ def test_model():
     assert 'title' in schema['properties']['posts']['items']['properties']
     assert schema['searchables'] == ['name__like', 'status']
     assert schema['properties']['team']['icon'] == 'users'
-    #
     assert schema['columns'] == User.__columns__
     # Relation schema
     assert schema['relations'] == ['Team']
@@ -58,6 +57,7 @@ def test_model():
     assert team_schema['properties']['members']['is_back_relation']
     assert 'email' in team_schema['properties']['members']['items']['properties']
     assert team_schema['searchable_fields'] == ['name']
+    assert team_schema['columns'] == ['name', 'phone', 'logo', 'remarks', 'managers', 'update_time', 'create_time', 'members']
     #
     # Test access
     #

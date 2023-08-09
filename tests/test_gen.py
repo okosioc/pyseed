@@ -20,7 +20,8 @@ from .core.models import User, Team
 
 def test_layout_parsing():
     """ Test layout parsing. """
-    # User profile
+    # Testing layouts
+    # NOTE: Below layouts just for layout parse tests, not for gen test cases
     user_profile_layout = '''#!form?title=User
         1#summary4,    2#8                                           
           avatar         name  
@@ -31,16 +32,16 @@ def test_layout_parsing():
           phone
           create_time
     '''
-    user_schema = User.schema()
-    # Team members
     team_members_layout = '''#!read?title=Members
         1#summary,     members#8                                                  
           logo           avatar, name, status, roles, email, phone, team_join_time
           name         
           phone                                                                
           members                                                                   
-          create_time  
+          create_time
     '''
+    # Schemas
+    user_schema = User.schema()
     team_schema = Team.schema()
 
     #
@@ -114,8 +115,9 @@ def test_gen():
     # Prepare team-members.html*, which is used to test 3-way merge with conflicts
     # We need to remove the outstanding files generated in last test run
     try:
-        os.remove('www/templates/public/team-members.html.11')
-        os.remove('www/templates/public/team-members.html.111')
+        os.remove('www/templates/public/team-members.html.BASE')
+        os.remove('www/templates/public/team-members.html.THIS')
+        os.remove('www/templates/public/team-members.html.OTHER')
     except FileNotFoundError:
         pass
     # Then manually init BASE and THIS file, otherwise then will be overwritten during each test

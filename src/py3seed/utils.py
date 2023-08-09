@@ -336,7 +336,7 @@ def parse_layout(body, schema):
     }
 
 
-def get_layout_fields(layout):
+def get_layout_fields(layout, exclude_formats=(Format.SUMMARY,)):
     """ Do not recursively parse inner object/array, only return current level field names. """
     if not layout:
         return []
@@ -348,7 +348,7 @@ def get_layout_fields(layout):
             # e.g,
             # - 1#summary4 is used to display a summary card of current object
             # - project#summary4 is used to display a summary card of a related object or inner object
-            if col['format'] == Format.SUMMARY:
+            if col['format'] in exclude_formats:
                 continue
             # Blank column
             if not col_name:

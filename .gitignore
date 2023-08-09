@@ -26,5 +26,6 @@ htmlcov/
 *,cover
 
 # pyseed
-*.*.11
-*.*.111
+*.*.BASE
+*.*.THIS
+*.*.OTHER
