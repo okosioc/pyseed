@@ -1,0 +1,9 @@
+# test globals function exists()
+iamhere.html: True
+iamnothere.html: False
+# test filters fields() and field()
+User title fields: ['name']
+User title field: name
+# test getpro
+text_welcome: 欢迎
+$text_welcome: 欢迎

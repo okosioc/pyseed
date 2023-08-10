@@ -226,7 +226,9 @@ UserRole: {1: 'Member', 2: 'Editor', 9: 'Admin'},
 }
 '''
     # global functions
-    env_txt = open('www/templates/public/env.txt', encoding='utf-8').read()
-    assert 'iamhere.html: True' in env_txt
-    assert 'User title fields: [\'name\']' in env_txt
-    assert 'User title field: name' in env_txt
+    render_env_txt = open('www/templates/public/render_env.txt', encoding='utf-8').read()
+    assert 'iamhere.html: True' in render_env_txt
+    assert 'User title fields: [\'name\']' in render_env_txt
+    assert 'User title field: name' in render_env_txt
+    assert 'text_welcome: 欢迎' in render_env_txt
+    assert '$text_welcome: 欢迎' in render_env_txt

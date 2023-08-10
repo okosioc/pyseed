@@ -16,12 +16,14 @@ import os
 import re
 import shutil
 import sys
+import configparser
 from typing import List
 
 from flask import request
 from jinja2 import Environment, TemplateSyntaxError, FileSystemLoader, filters
 from werkzeug.urls import url_quote, url_encode
 
+import py3seed.ext
 from py3seed import registered_models, BaseModel, TemplateError, LayoutError
 from py3seed.utils import work_in, generate_names, get_layout_fields, parse_layout
 from py3seed.merge3 import Merge3
@@ -30,7 +32,7 @@ logger = logging.getLogger('pyseed')
 INCLUDES_FOLDER = '__includes'
 
 
-def _prepare_jinja2_env():
+def _prepare_jinja2_env(properties):
     """ Prepare env for rendering jinja2 templates. """
     #
     # For more env setting, please refer to https://jinja.palletsprojects.com/en/3.0.x/api/#jinja2.Environment
@@ -66,9 +68,15 @@ def _prepare_jinja2_env():
         fp = os.path.join(env.loader.searchpath[0], path)
         return os.path.exists(fp)
 
+    def getpro(key):
+        """ Get property value by key, from .pyseed-properties. """
+        return properties.get(key)
+
     env.globals['update_query'] = update_query
     env.globals['new_model'] = new_model
     env.globals['exists'] = exists
+    env.globals['getpro'] = getpro
+    env.add_extension(py3seed.ext.InlineGetpro)
 
     def split(value, separator):
         """ Split a string. """
@@ -258,6 +266,16 @@ def _gen(ds: str = None):
         logger.error('Can not find any models to gen')
         return False
     #
+    # Load properties file, which is ini format
+    # https://docs.python.org/3/library/configparser.html
+    #
+    properties = {}
+    properties_file = configparser.ConfigParser()
+    properties_file.read('.pyseed-properties')
+    for section in properties_file.sections():
+        for k in properties_file[section]:
+            properties[k] = properties_file[section][k]
+    #
     # For each domain:
     # 1. Build context
     # 2. Render jinja2 templates
@@ -321,7 +339,7 @@ def _gen(ds: str = None):
         #
         # Do generation logic for each includes
         #
-        env = _prepare_jinja2_env()
+        env = _prepare_jinja2_env(properties)
         for include in includes:
             base = os.path.dirname(include)
             name = os.path.basename(include)

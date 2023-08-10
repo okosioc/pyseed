@@ -1,0 +1,11 @@
+# test globals function exists()
+iamhere.html: {{ exists('__includes/iamhere.html') }}
+iamnothere.html: {{ exists('__includes/iamnothere.html') }}
+# test filters fields() and field()
+User title fields: {{ models['User']['schema']|fields('title|name|\\w*name') }}
+{% for v in blueprint.views if v.name == 'profile' %}
+User title field: {{ v.rows|field('title|name|\\w*name') }}
+{% endfor %}
+# test getpro
+text_welcome: {{ getpro('text_welcome') }}
+$text_welcome: $$(text_welcome)
