@@ -8,10 +8,13 @@
     :copyright: (c) 2021 by weiminfeng.
     :date: 2022/9/14
 """
+import json
 import re
 from datetime import datetime
 
-from py3seed import Comparator, SimpleEnumMeta, inflection
+from flask.json.provider import DefaultJSONProvider
+
+from py3seed import Comparator, SimpleEnumMeta, inflection, ModelJSONEncoder
 
 # Valid datetime formats
 _valid_formats = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d']
@@ -227,3 +230,16 @@ def convert_from_string(string_value, t):
         converter = type_converters[None]
     #
     return converter._convert_from_string(string_value, t)
+
+
+class ModelJSONProvider(DefaultJSONProvider):
+    """ json_encode is removed from flask 2.3, instead you need to provide a json provider.
+
+    https://flask.palletsprojects.com/en/2.3.x/api/#flask.Flask.json
+    """
+
+    def dumps(self, obj, **kwargs):
+        return json.dumps(obj, **kwargs, cls=ModelJSONEncoder)
+
+    def loads(self, s, **kwargs):
+        return json.loads(s, **kwargs)

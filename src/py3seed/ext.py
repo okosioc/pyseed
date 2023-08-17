@@ -19,12 +19,12 @@ _gettext_inside_re = re.compile(r"\\?[()]")
 
 
 class InlineGettext(Extension):
-    """ This extension implements support for inline gettext blocks::
+    """ This extension implements support for inline gettext blocks by __()::
 
         <h1>__(Welcome)</h1>
         <p>__(This is a paragraph)</p>
 
-    Requires the i18n extension to be loaded and configured.
+    Requires the i18n extension to be loaded and configured, it is only an simple alternative of gettext(), do not support ngettext()
 
     Thanks to https://jinja.palletsprojects.com/en/3.0.x/extensions/#inline-gettext
     """
@@ -87,7 +87,7 @@ _getpro_re = re.compile(r"\$\$\((.*?)\)", re.DOTALL)
 
 
 class InlineGetpro(Extension):
-    """ This extension implements support for inline get pyseed property::
+    """ This extension implements support for inline get pyseed property by $$()::
 
         <button>$$(text_search)</button> -> <button>{{ gerpro('text_search') }}</button>
 

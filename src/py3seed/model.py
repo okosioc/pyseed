@@ -106,9 +106,10 @@ class SimpleEnum(object, metaclass=SimpleEnumMeta):
 
 
 class Format(SimpleEnum):
-    """ Predefined available formats, which should be used to control ui or api generation.
+    """ Built-in formats, which should be used to control ui or api generation.
 
-    NOTE: Name of format can NOT end with interger, as #FormatInteger has special meaning in view layout, e.g, '#summary4' means with summary format and 4 span
+    NOTE: Name of format can NOT end with interger, as #FormatInteger has special meaning in view layout:
+    e.g, '#summary4' means with summary format and 4 span, if you defined a format named 'gallery1' and want to use it view layout, the parsing logic will use 1 as the span and gallery as format.
     """
     # Below values are the same with OAS 3.0
     # - https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#data-types
@@ -145,6 +146,7 @@ class Format(SimpleEnum):
     TAB = 'tab'  # Objects with tabs nav, i.e, [{}]
     TABLE = 'table'  # Objects in table, i.e, [{}]
     MODAL = 'modal'  # Objects with some fields in table and all fields in modal, i.e, [{}]
+    DATALIST = 'datalist'  # Objects in dl/dt/dd, i.e, [{}]
     GRID = 'grid'  # Objects in grid, i.e, [{}]
     TIMELINE = 'timeline'  # Objects in timeline, i.e, [{}]
     CALENDAR = 'calendar'  # Objects in calendar, i.e, [{}]

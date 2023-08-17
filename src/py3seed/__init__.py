@@ -16,7 +16,7 @@ from .model import SimpleEnumMeta, SimpleEnum, Format, Comparator, Ownership, DA
     ModelField, RelationField, BaseModel
 from .admin import register, registered_models
 from .utils import Pagination
-from .websupport import populate_model, populate_search
+from .websupport import populate_model, populate_search, ModelJSONProvider
 from .cachesupport import CacheModel
 from .mongosupport import MongoModel, connect
 
