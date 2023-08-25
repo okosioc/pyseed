@@ -327,9 +327,18 @@ def _gen(ds: str = None):
         for bp in blueprints:  # Blueprints
             bp_name = bp['name']
             logger.info(f'{bp_name}/')
+            models_by_name = {}
             for v in bp['views']:  # Views
                 v_name = v['name']
                 logger.info(f'  {v_name}')
+                #
+                v_model = v['model']
+                models_by_name[v_model['name']] = v_model
+                # Add relation models
+                for relation in v_model['schema']['relations']:
+                    models_by_name[relation] = model_settings[relation]
+            #
+            bp['models'] = list(models_by_name.values())
         # models & blueprints can be used in all templates
         context = {
             'domain': domain,

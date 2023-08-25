@@ -129,6 +129,8 @@ class Format(SimpleEnum):
     RTE = 'rte'
     MARKDOWN = 'markdown'
     IMAGE = 'image'  # Image upload support
+    CAROUSEL = 'carousel'  # Image upload support and display in carousel
+    CANVAS = 'canvas'  # Image editing support
     AVATAR = 'avatar'  # User avatar
     FILE = 'file'  # File upload support
     VIDEO = 'video'  # Video upload support
@@ -146,7 +148,6 @@ class Format(SimpleEnum):
     TAB = 'tab'  # Objects with tabs nav, i.e, [{}]
     TABLE = 'table'  # Objects in table, i.e, [{}]
     MODAL = 'modal'  # Objects with some fields in table and all fields in modal, i.e, [{}]
-    DATALIST = 'datalist'  # Objects in dl/dt/dd, i.e, [{}]
     GRID = 'grid'  # Objects in grid, i.e, [{}]
     TIMELINE = 'timeline'  # Objects in timeline, i.e, [{}]
     CALENDAR = 'calendar'  # Objects in calendar, i.e, [{}]
