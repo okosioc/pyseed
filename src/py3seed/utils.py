@@ -164,10 +164,6 @@ def parse_layout(body, schema):
                 indexes.append(index)
             elif indent < first_indent:
                 raise LayoutError(f'Invalid indent {indent} < {first_indent}: ' + line.replace(" ", "."))
-            else:
-                diff = first_indent - indent
-                if diff % 2 != 0:
-                    raise LayoutError(f'Invalid indent {indent} - {first_indent} is odd: ' + line.replace(" ", "."))
         # Parse each segment
         for i in range(0, len(indexes)):
             index = indexes[i]
@@ -205,8 +201,13 @@ def parse_layout(body, schema):
                 column = columns[j]
                 col_name = column['name']
                 #
-                col_lines = column.get('lines', None)
+                col_lines = column.get('lines', [])
                 logger.debug(f'{leading}Column ({i},{j}): {col_name}' + (('\n' + '\n'.join(col_lines)) if col_lines else ''))
+                # Validate each line's indent
+                for l in col_lines:
+                    indent = len(l) - len(l.lstrip())
+                    if indent % 2 != 0:
+                        raise LayoutError(f'Invalid indent {indent}: ' + l.replace(" ", "."))
                 #
                 # Column name possible values:
                 # 1) blank column prints only a placeholder

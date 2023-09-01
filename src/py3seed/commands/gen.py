@@ -205,6 +205,10 @@ def _gen(ds: str = None):
         attribute = getattr(module, attr)
         if inspect.isclass(attribute) and issubclass(attribute, BaseModel):
             model_name, model_class = attribute.__name__, attribute
+            # Model may be imported twice, in case of typo or being used as other name
+            if model_name in model_settings:
+                continue
+            #
             logger.info(f'{model_name}')
             # Parse model schema and views
             schema = model_class.schema()
@@ -242,7 +246,7 @@ def _gen(ds: str = None):
                 logger.info(f'- {"|".join(domains)}://{blueprint}/{name}: {layout}')
                 # Validate to make sure view name is unique
                 if name in view_names:
-                    logger.error(f'View name {v["name"]} is not unique')
+                    logger.error(f'View name {name} is not unique')
                     return False
                 #
                 view_names.add(name)
