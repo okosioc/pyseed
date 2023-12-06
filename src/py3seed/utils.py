@@ -89,9 +89,8 @@ def parse_layout(body, schema):
 
     Layout is multi-line string defined in a model view.
     e.g,
-    'demo/user-profile': {              # action name
-        'domains': ['www'],             # domains that this action is available
-        'layout': '''#!form?param=1     # first line is action line defining action type and params, i.e, query, read, read_by_key, form
+    'www|miniapp://demo/user-profile': {    # domains can be separated by |, blueprint is demo and view is user-profile
+        'layout': '''#!form?param=1         # first line is action line defining action type and params, i.e, query, read, read_by_key, form
             $#4,           0#8
               avatar         name
               name           phone
@@ -220,7 +219,7 @@ def parse_layout(body, schema):
                 # Hyphen column
                 elif col_name == '-':
                     pass
-                # Group column
+                # Group column, only contains number and dot(.)
                 elif col_name.replace('.', '').isdigit():
                     if not col_lines:
                         raise LayoutError(f'Group {col_name} should have inner layout')

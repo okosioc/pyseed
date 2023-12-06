@@ -33,6 +33,7 @@ class CUser(CacheModel):
     team_join_time: datetime = None
     update_time: datetime = None
     create_time: datetime = datetime.now
+    is_admin: bool = False
     #
     __key__ = 'email'
 
@@ -62,9 +63,10 @@ def test_crud():
     # C
     team1 = CTeam(name='team1')
     team1.save()
-    user1 = CUser(name='user1', email='user1@dev', phone='13800138000', team=team1, team_join_time=datetime.now())
+    user1 = CUser(name='user1', email='user1@dev', phone='13800138000', team=team1, team_join_time=datetime.now(), is_admin=True)
     user1.save()
     assert user1.id == 1
+    assert user1.is_admin == True
 
     # R
     assert CUser.find_one({'name': 'user1'}).email == user1.email
@@ -90,6 +92,10 @@ def test_crud():
 
     # Q
     assert CUser.find_by_ids([1, 2])[1].name == user2.name
+    assert len(CUser.find({'is_admin': True})) == 1
+    # pagination
+    assert len(CUser.find({}, limit=1)) == 1
+    assert len(CUser.find({}, skip=1, limit=1)) == 1
     # projection
     assert CUser.find({'name': 'user2'}, projection=['name'])[0] == {'id': 2, 'name': 'user2'}
 
@@ -124,7 +130,7 @@ def test_crud():
     project2.save()
     assert len(user2.projects) == 2
 
-    # DM
+    # D
     user11 = CUser(name='user11', email='user11@dev', team=team1, team_join_time=datetime.now())
     user11.save()
     user4 = CUser(name='user4', email='user4@dev', team=team1, team_join_time=datetime.now())

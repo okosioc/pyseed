@@ -61,6 +61,9 @@ class CacheModel(BaseModel):
                     match = condition in value  # e.g, user.team -> team.members, then team.members = User.find({team_id: self.id})
                 else:
                     match = value == condition  # e.g, user.team -> team.members, then user.team = Team.find({id: self.team_id})
+            # Many conditions are AND relationship
+            if not match:
+                break
         #
         return match
 
@@ -82,8 +85,13 @@ class CacheModel(BaseModel):
             field, order = sort[0]
             records.sort(key=lambda x: x.get(field), reverse=(True if order == -1 else False))
         # pagination
-        if 'skip' in kwargs:
-            records = records[kwargs['skip']:kwargs['skip'] + kwargs['limit']]
+        if 'skip' in kwargs or 'limit' in kwargs:
+            skip = kwargs.get('skip', 0)
+            limit = kwargs.get('limit', -1)
+            if limit == -1:
+                records = records[skip:]
+            else:
+                records = records[skip:skip + limit]
         #
         ret = [cls(r) for r in records]
         # projection, [field], used to specify a subset of fields that should be included in the result documents

@@ -748,8 +748,8 @@ class BaseModel(metaclass=ModelMeta):
         # Validate against schema
         # print(f'Validate {cls.__name__} with {data}')
         for field_name, field_type in cls.__fields__.items():
-            # Skip recursive validation in relation value, just keep the relation value
-            # please note: in save logic, we need to skip relation field, e.g, in mongosupport, we use self.dict(include_relations=False)
+            # Skip recursive validation in relation value, just keep the relation value, your program may need this relation value for further processing
+            # NOTE: in save logic, we need to skip relation field, e.g, in mongosupport, we use self.dict(include_relations=False)
             if isinstance(field_type, RelationField):
                 relation_value = data.get(field_name, Undefined)
                 if relation_value is not Undefined:
@@ -786,8 +786,9 @@ class BaseModel(metaclass=ModelMeta):
                             if id_:
                                 if not isinstance(id_, relation_type.__id_type__):
                                     id_ = relation_type.__id_type__(id_)
-                                #
-                                update_value.append(id_)
+                                # Prevent dulplicate id in update_value
+                                if id_ not in update_value:
+                                    update_value.append(id_)
                     elif relation_value is not None:
                         relation_type = source_field.type
                         if isinstance(relation_value, dict):
@@ -1089,6 +1090,10 @@ class BaseModel(metaclass=ModelMeta):
     ):
         """ Access model recrusively. """
         for field_name, field_value in self.__dict__.items():
+            # __dict__ may contain some other dynamic attributes, skip non-defined fields
+            if field_name not in self.__class__.__fields__:
+                continue
+            #
             field = self.__class__.__fields__[field_name]
             if isinstance(field, RelationField):
                 if include_relations:
