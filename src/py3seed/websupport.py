@@ -10,10 +10,11 @@
 """
 import json
 import re
+
 from datetime import datetime
+from typing import get_origin, get_args
 
 from flask.json.provider import DefaultJSONProvider
-
 from py3seed import Comparator, SimpleEnumMeta, inflection, ModelJSONEncoder
 
 # Valid datetime formats
@@ -102,19 +103,22 @@ def _sort_key(item):
     return not isinstance(key, int), key
 
 
-def populate_model(multidict, model_cls, set_default=True):
+def populate_model(multidict, model_cls):
     """ Create a model instance from a multidict.
     This is necessary because some HTML form elements pass multiple values for the same key.
 
-    :param multidict: multiple values for the same key, e.g, MultiDict([('a', 'b'), ('a', 'c')])
+    :param multidict: werkzeug.datastructures.MultiDict
+    :param model_cls: model class to be populated
     """
     d = {}
     model_prefix = model_cls.__name__.lower() + '.'  # demouser.name
     model_prefix_underscore = inflection.underscore(model_cls.__name__) + '.'  # demo_user.name
-    for key, value in multidict.items():
-        # NOTE: Blank string skipped
-        if not value:
-            continue
+    # NOTE: MultiDict.items() will only return the first value for the same key
+    # MultiDict.lists() will return all values as list for the same key
+    # e.g, MultiDict([('a', 'b'), ('a', 'c'), ('1', '2'), ('!', None)])
+    # md.items() = [('a', 'b'), ('1', '2'), ('!', None)]
+    # md.lists() = [('a', ['b', 'c']), ('1', ['2']), ('!', [None])]
+    for key, values in multidict.lists():
         # Only process the keys with leading model.
         if key.startswith(model_prefix):
             key = key[len(model_prefix):]
@@ -122,12 +126,19 @@ def populate_model(multidict, model_cls, set_default=True):
             key = key[len(model_prefix_underscore):]
         else:
             continue
+        # Filter blank values in value
+        values = [v.strip() for v in values if v]
+        if not values:
+            continue
         #
-        t = model_cls.get_type(key)
-        if isinstance(value, list):
-            converted_value = [convert_from_string(v, t) for v in value if v]
+        type_ = model_cls.get_type(key)
+        origin = get_origin(type_)
+        if origin is list:
+            type_ = get_args(type_)[0]
+            converted_value = [convert_from_string(v, type_) for v in values]
         else:
-            converted_value = convert_from_string(value, t)
+            value = values[0]  # NOTE: Only the first value is used as field type is not a list
+            converted_value = convert_from_string(value, type_)
         #
         d[key] = converted_value
     #
@@ -141,35 +152,59 @@ def populate_search(multidict, model_cls):
     :returns: search - return to page, condition - send to pymongo for search
     """
     search, condition = {}, {}
-    for k, v in multidict.items():
-        if not k.startswith('search.') or not v:
+    search_prefix = 'search.'
+    for key, values in multidict.lists():
+        # Only process the keys with leading search.
+        if key.startswith(search_prefix):
+            key = key.replace(search_prefix, '')
+        else:
             continue
-        # Remove search. from k
-        k = k.replace('search.', '')
-        v = v.strip()
-        search[k] = v
+        # Filter blank values in value
+        values = [v.strip() for v in values if v]
+        if not values:
+            continue
+        # Set value to search for page rendering
+        search[key] = values if len(values) > 1 else values[0]
         # Set default comparator
-        c = Comparator.EQ
-        if '__' in k:
-            k, c = k.split('__')
-        #
-        t = model_cls.get_type(k)
-        if Comparator.EQ == c:
-            cond = convert_from_string(v, t)
-        elif Comparator.IN == c or Comparator.NIN == c:
-            cond = {'$%s' % c: [convert_from_string(vv, t) for vv in v]}
-        elif Comparator.LIKE == c:
-            # In order to use index, we only support starting string search here
+        comparator = Comparator.EQ
+        if '__' in key:
+            field, comparator = key.split('__')
+        else:
+            field = key
+        # Convert value according to field type
+        type_ = model_cls.get_type(field)
+        # If field type is a list, please read mongo's document firstly, https://www.mongodb.com/docs/manual/tutorial/query-arrays/
+        # e.g, post.tags is List[str]
+        # - search condition {tags: 'tech'} will filter the whose tags contains tech
+        # - search condition {tags: {$in: ['tech', 'life']}} will filter whose tags contains tech or life
+        # - search condition {tags: ['tech', 'life']} will filter whose tags is same as [tech, life]
+        # We always do not want to match extractly the whole list field, so we need inner type to build condition
+        origin = get_origin(type_)
+        if origin is list:
+            type_ = get_args(type_)[0]
+        # Build condition according to comparator
+        if Comparator.EQ == comparator:
+            if len(values) == 1:
+                cond = convert_from_string(values[0], type_)
+            else:
+                cond = {'$in': [convert_from_string(v, type_) for v in values]}
+        elif Comparator.IN == comparator or Comparator.NIN == comparator:
+            cond = {'$%s' % comparator: [convert_from_string(v, type_) for v in values]}
+        elif Comparator.LIKE == comparator:
+            value = values[0]
+            # NOTE: Performance issue for huge collection, as $regex is not index friendly
+            # Use case-sensitive prefix expression can use mongodb index, regx = re.compile('^%s' % re.escape(v))
             # https://docs.mongodb.com/manual/reference/operator/query/regex/#index-use
-            regx = re.compile('^%s' % re.escape(v))
+            regx = re.compile('.*%s.*' % re.escape(value), re.IGNORECASE)
             cond = {'$regex': regx}
         else:
-            cond = {'$%s' % c: convert_from_string(v, t)}
+            value = values[0]
+            cond = {'$%s' % comparator: convert_from_string(value, type_)}
         #
-        if k not in condition:
-            condition[k] = cond
+        if field not in condition:
+            condition[field] = cond
         else:
-            condition[k].update(cond)
+            condition[field].update(cond)
     #
     return search, condition
 

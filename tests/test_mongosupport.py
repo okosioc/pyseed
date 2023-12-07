@@ -11,6 +11,7 @@
 
 import pytest
 from pymongo.errors import DuplicateKeyError
+from werkzeug.datastructures import MultiDict
 
 from py3seed import DataError, populate_model
 from .core.models import User, Team
@@ -73,13 +74,13 @@ def test_crud(db):
     del team1.members
     assert len(team1.members) == 3
 
-    # posting
-    request = {
-        'user.name': 'test3',
-        'user.email': 'test3',
-        'user.team': {'_id': str(team1._id)}
+    # dict
+    user_dict = {
+        'name': 'test3',
+        'email': 'test3',
+        'team': {'_id': team1._id}
     }
-    usr3 = populate_model(request, User)
+    usr3 = User(user_dict)
     usr3.save()
     # reset back relations
     del team1.members
