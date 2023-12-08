@@ -10,10 +10,10 @@
 """
 
 import pytest
-from pymongo.errors import DuplicateKeyError
-from werkzeug.datastructures import MultiDict
 
-from py3seed import DataError, populate_model
+from pymongo.errors import DuplicateKeyError
+from py3seed import DataError
+
 from .core.models import User, Team
 
 
@@ -35,6 +35,8 @@ def test_crud(db):
     assert User.count({}) == 1
     # R
     assert User.find_one({'name': 'test'}).name == 'test'
+    # id property
+    assert usr.id == usr._id
 
     # U
     del usr.name

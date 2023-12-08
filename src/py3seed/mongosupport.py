@@ -147,6 +147,14 @@ class MongoModel(BaseModel):
     # Mongo ID field
     _id: ObjectId = None
 
+    @property
+    def id(self):
+        """ Make sure we can use a unified approach to obtain id from different types of models.
+
+        NOTE: Setting id still need to use _id, e.g, user._id = ObjectId()
+        """
+        return self._id
+
     #
     #
     # Class level pymongo api

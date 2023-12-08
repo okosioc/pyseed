@@ -413,17 +413,18 @@ class ModelMeta(ABCMeta):
         slots: Set[str] = namespace.get('__slots__', ())
         slots = {slots} if isinstance(slots, str) else set(slots)
         # Using for self-referencing, so we that we can remove all ForwardRef just after the class is created
-        # If use ForwardRef('other_class_name'), we do not have appropriate timing to replace it to its real class
-        # as we do not know if it is created or not
+        # Can not use to refernce other class, if using ForwardRef('other_class_name'), we do not have appropriate timing to replace it to its real class as we do not know if it is created or not
         has_forward_refs = False
         #
         for base in reversed(bases):
             if issubclass(base, BaseModel):  # True if base is BaseModel or its subclass
                 # BaseModel do not have __fields__
                 if base is not BaseModel:
-                    # Inherit the fields defined by the parent class
+                    # Inherit the fields and properties defined by the parent class
                     # e.g, User is a subclass of MongoModel, the _id field defined in MongoModel must be accessible in User
                     fields.update(deepcopy(base.__fields__))
+                    # e.g, User is a subclass of MongoModel, the id property defined in MongoModel must be accessible in User
+                    properties.update(deepcopy(base.__properties__))
                 # Id field's type should be defined in MongoModel/CacheModel, so we need to fetch them from bases
                 if '__id_type__' not in namespace:
                     namespace['__id_type__'] = base.__id_type__
@@ -483,6 +484,7 @@ class ModelMeta(ABCMeta):
         # Validation
         skips = set()
         if namespace.get('__qualname__') != 'BaseModel':
+            # print('Class: ' + namespace.get('__qualname__'))
             #
             # Iterate each annotation(field)
             # Similar to typing.get_type_hints, https://docs.python.org/3/library/typing.html
@@ -574,6 +576,7 @@ class ModelMeta(ABCMeta):
             # Properties
             #
             for attr in namespace:
+                # print('Properties:', attr, type(namespace.get(attr)))
                 if isinstance(namespace.get(attr), property):
                     properties[attr] = namespace.get(attr)
         #
