@@ -128,8 +128,7 @@ class CacheModel(BaseModel):
 
     @classmethod
     def find_by_ids(cls, ids, *args, **kwargs):
-        """ Find many models by multi ObjectIds. """
-        #
+        """ Find many models by multi ids. """
         if not ids:
             return []
         #
@@ -141,7 +140,7 @@ class CacheModel(BaseModel):
         #
         filter_.update({'id': {'$in': ids}})
         #
-        records = cls.find(filter_, *args, **kwargs)
+        records = cls.find(filter_, **kwargs)
         records.sort(key=lambda i: ids.index(i.id))
         #
         return records

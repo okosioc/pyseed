@@ -190,7 +190,7 @@ def _gen(ds: str = None):
     # 2. Load each models' schema and views, filtering models and views that needs to be generated
     #
     model_settings = {}
-    domain_names, view_names = set(), set()
+    domain_names, blueprint_view_names = set(), set()
     module_name = 'models'
     module_path = os.path.join('core', module_name, '__init__.py')
     if not os.path.exists(module_path):
@@ -246,11 +246,12 @@ def _gen(ds: str = None):
                 layout = v.strip()
                 logger.info(f'- {"|".join(domains)}://{blueprint}/{name}: {layout}')
                 # Validate to make sure view name is unique
-                if name in view_names:
-                    logger.error(f'View name {name} is not unique')
+                blueprint_view_name = f'{blueprint}/{name}'
+                if blueprint_view_name in blueprint_view_names:
+                    logger.error(f'View {blueprint_view_name} is not unique')
                     return False
                 #
-                view_names.add(name)
+                blueprint_view_names.add(blueprint_view_name)
                 #
                 l = parse_layout(layout, schema)
                 views.append({

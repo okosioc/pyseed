@@ -237,6 +237,7 @@ class MongoModel(BaseModel):
 
     @classmethod
     def find_one_and_update(cls, filter_or_id, update, *args, **kwargs):
+        """ Find and update a single model. """
         collection = cls.get_collection(**kwargs)
         if filter_or_id is None:
             return None
