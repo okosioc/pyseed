@@ -87,8 +87,11 @@ def _prepare_jinja2_env(properties):
         return value.items()
 
     def keys(value):
-        """ Return keys of a dict. """
-        return value.keys()
+        """ Return keys of dict. """
+        if type(value) is list:  # list of tuple
+            return map(lambda x: x[0], value)
+        else:
+            return value.keys()
 
     def quote(value):
         """ Add single quote to value if it is str, else return its __str__. """

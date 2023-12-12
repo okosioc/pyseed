@@ -91,7 +91,7 @@ def parse_layout(body, schema):
     e.g,
     'www|miniapp://demo/user-profile': {    # domains can be separated by |, blueprint is demo and view is user-profile
         'layout': '''#!form?param=1         # first line is action line defining action type and params, i.e, query, read, read_by_key, form
-            $#4,           0#8
+            1#4,           2#8
               avatar         name
               name           phone
               status         intro
