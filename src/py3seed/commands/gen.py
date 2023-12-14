@@ -289,9 +289,11 @@ def _gen(ds: str = None):
     # 1. Build context
     # 2. Render jinja2 templates
     #
+    results = {}  # {domain: {file_gen: 0, dir_gen: 0, warnings: [], ...}}
     for domain in domain_names:
         # Domain should be a project folder, e.g, www/miniapp/android/ios
         logger.info(f'Gen for domain {domain}')
+        results[domain] = {}
         #
         # Parse .pyseed-includes in current folder, files whose name ends with jinja2 and folders whose name contains syntax {{ should be included
         # e.g,
@@ -353,6 +355,7 @@ def _gen(ds: str = None):
             'domain': domain,
             'models': model_settings,
             'blueprints': blueprints,
+            'result': {'file_gen': 0, 'dir_gen': 0, 'warnings': []}
         }
         #
         # Do generation logic for each includes
@@ -362,6 +365,21 @@ def _gen(ds: str = None):
             base = os.path.dirname(include)
             name = os.path.basename(include)
             _recursive_render(base, base, name, context, env)
+        #
+        results[domain] = context['result']
+    #
+    # Print results
+    #
+    logger.info(f'----------')
+    for domain, result in results.items():
+        logger.info(f'{domain}:')
+        logger.info(f'  {result["dir_gen"]} dirs generated')
+        logger.info(f'  {result["file_gen"]} files generated')
+        logger.info(f'  {len(result["warnings"])} warnings')
+        for i, warning in enumerate(result['warnings']):
+            logger.info(f'    {i}. {warning}')
+    logger.info(f'----------')
+    logger.info(f'Generation Done!')
 
 
 def _recursive_render(t_base, o_base, name, context, env):
@@ -441,6 +459,7 @@ def _recursive_render(t_base, o_base, name, context, env):
             #     www/templates/demo
             #     ...
             logger.info(f'Render {o_name}/')
+            context['result']['dir_gen'] += 1
             o_path = os.path.join(o_base, o_name)
             if not os.path.exists(o_path):
                 os.mkdir(o_path)
@@ -522,7 +541,9 @@ def _recursive_render(t_base, o_base, name, context, env):
                 elif os.path.exists(o_file_1):
                     # After manually merge, need to remove BASE/THIS/OTHER files mannually
                     if os.path.exists(o_file_other):
-                        logger.warning(f'Please solve last merging conflicts of {o_file_raw}')
+                        msg = f'Please solve last merging conflicts of {o_file_raw}'
+                        context['result']['warnings'] += [msg]
+                        logger.warning(msg)
                         continue
                     # BASE, copy from .1
                     shutil.copyfile(o_file_1, o_file_base)
@@ -534,6 +555,7 @@ def _recursive_render(t_base, o_base, name, context, env):
                     o_file = o_file_raw
                 #
                 logger.info(f'Render {o_file}')
+                context['result']['file_gen'] += 1
                 # Push current key to context
                 if out_key:
                     context[out_key] = out_values[i]
@@ -573,7 +595,9 @@ def _recursive_render(t_base, o_base, name, context, env):
                     shutil.copyfile(o_file_other, o_file_1)
                     # Has conficts, need to solve manually
                     if '=======' in merged:
-                        logger.warning(f'Please solve merging conflicts of {o_file_raw}')
+                        msg = f'Please solve merging conflicts of {o_file_raw}'
+                        context['result']['warnings'] += [msg]
+                        logger.warning(msg)
                     else:
                         # Remove BASE/THIS/OTHER files
                         os.remove(o_file_base)
