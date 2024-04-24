@@ -70,9 +70,9 @@ def generate_names(name):
         return {
             'name': name,  # => SampleModel
             'name_lower': name.lower(),  # => samplemodel
-            'name_snake': name_snake,  # => sample_model
+            'name_snake': name_snake,  # => sample_model, e.g, python package&module name
             'name_snake_plural': inflection.pluralize(name_snake),  # => sample_models
-            'name_kebab': name_kebab,  # => sample-model
+            'name_kebab': name_kebab,  # => sample-model, e.g, html folder&file name
             'name_kebab_plural': inflection.pluralize(name_kebab),  # => sample-models
             'name_title': name_title,  # => Sample Model
             'name_title_lower': name_title.lower(),  # => sample model

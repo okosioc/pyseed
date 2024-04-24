@@ -118,6 +118,8 @@ def test_gen():
         os.remove('www/templates/public/team-members.html.BASE')
         os.remove('www/templates/public/team-members.html.THIS')
         os.remove('www/templates/public/team-members.html.OTHER')
+        #
+        os.remove('www/views/admin_demo.py')
     except FileNotFoundError:
         pass
     # Then manually init BASE and THIS file, otherwise then will be overwritten during each test
@@ -225,8 +227,12 @@ UserStatus: {'normal': 'Normal', 'rejected': 'Rejected'},
 UserRole: {1: 'Member', 2: 'Editor', 9: 'Admin'},
 }
 '''
+    # py naming convention, for blueprint whose name is kebab-case, e.g, www://admin-demo/user-list
+    # when {{#blueprint}}.py.jinja2 is rendered, the file name should be admin_demo.py, instead of admin-demo.py
+    assert os.path.exists('www/views/admin_demo.py')
+
     # global functions
-    render_env_txt = open('www/templates/public/render_env.txt', encoding='utf-8').read()
+    render_env_txt = open('www/templates/render_env.txt', encoding='utf-8').read()
     assert 'iamhere.html: True' in render_env_txt
     assert 'User title fields: [\'name\']' in render_env_txt
     assert 'User title field: name' in render_env_txt

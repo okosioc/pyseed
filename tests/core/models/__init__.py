@@ -124,4 +124,7 @@ class User(MongoModel):
               phone        
               create_time  
         ''',
+        'www://admin-demo/users': '''#!query?title=Users
+            avatar, name, status, roles, email, phone, create_time
+        '''
     }

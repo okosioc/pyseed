@@ -299,7 +299,8 @@ def _gen(ds: str = None):
         # e.g,
         #   www/static/js/enums.js.jinja2
         #   www/templates/{{#blueprints}}
-        #   www/views/{{#blueprints}}.stub.py.jinja2
+        #   www/blueprints/__init__.py.jinja2
+        #   www/blueprints/{{#blueprints}}.py.jinja2
         #
         includes_file = '.pyseed-includes'
         includes = []
@@ -517,6 +518,9 @@ def _recursive_render(t_base, o_base, name, context, env):
             #
             for i, o_name in enumerate(out_names):
                 o_file_raw = o_name.replace('.jinja2', '')
+                # Python file namimg convention, e.g, pub-demo.py -> pub_demp.py
+                if o_file_raw.endswith('.py'):
+                    o_file_raw = o_file_raw.replace('-', '_')
                 #
                 # AutoMerge
                 # Check if output with additional suffix exsit, if yes, go into below merging logic, otherwise, render(overwrite) directly
