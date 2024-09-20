@@ -128,3 +128,25 @@ class User(MongoModel):
             avatar, name, status, roles, email, phone, create_time
         '''
     }
+
+
+class Tag(MongoModel):
+    """ Tag model. """
+    name: str
+    #
+    update_time: datetime = None
+    create_time: datetime = datetime.now
+
+
+class Album(MongoModel):
+    """ Album model. """
+    title: str
+    cover: str = None
+    photos: List[str] = None
+    #
+    tags: List[Tag] = RelationField(
+        back_field_name='albums', back_field_is_list=True, back_field_order=[('create_time', -1)]
+    )
+    #
+    update_time: datetime = None
+    create_time: datetime = datetime.now

@@ -147,8 +147,13 @@ def parse_layout(body, schema):
     }
     """
 
+    # Sometimes we may encounter circular reference, so we need to use a global variable to store object schemas
+    object_schemas = {}
+
     def _parse_lines(level, _lines, _schema, _action):
         """ Recursively parse lines. """
+        # Schema should be always a object schema
+        object_schemas[_schema['py_type']] = _schema
         leading = '- ' * (level + 1)  # 2 spaces for each level
         # logger.debug('Parse lines:\n' + '\n'.join(_lines))
         _rows = []
@@ -239,8 +244,16 @@ def parse_layout(body, schema):
                     inner_schema = None
                     if column_type == 'object':
                         inner_schema = column_schema
+                        # Self-reference schema, inner schema should be processed before so that it can be found in object_schemas
+                        # Just replace the properties as we may define differnt icon/title/description for current object
+                        if 'ref' in column_schema:
+                            inner_schema['properties'] = object_schemas[column_schema['ref']]['properties']
                     elif column_type == 'array':
-                        inner_schema = column_schema['items'] if column_schema['items']['type'] == 'object' else None
+                        # Self-reference schema, inner schema should be processed before so that it can be found in object_schemas
+                        if 'ref' in column_schema['items']:
+                            inner_schema = object_schemas[column_schema['items']['ref']]
+                        else:
+                            inner_schema = column_schema['items'] if column_schema['items']['type'] == 'object' else None
                     #
                     if inner_schema:
                         # Inner layout is optional for inner object

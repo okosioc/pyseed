@@ -535,11 +535,11 @@ def _recursive_render(t_base, o_base, name, context, env):
                 # e.g,
                 # user-profile.html.1 exists, coping user-profile.html.1 to user-profile.html.BASE and user-profile.html to user-profile.html.THIS, generating user-profile.html.OTHER, then perform 3-way merge to user-profile.html
                 #
-                o_file_0 = o_name.replace('.jinja2', '.0')
-                o_file_1 = o_name.replace('.jinja2', '.1')
-                o_file_base = o_name.replace('.jinja2', '.BASE')
-                o_file_this = o_name.replace('.jinja2', '.THIS')
-                o_file_other = o_name.replace('.jinja2', '.OTHER')
+                o_file_0 = o_file_raw + '.0'
+                o_file_1 = o_file_raw + '.1'
+                o_file_base = o_file_raw + '.BASE'
+                o_file_this = o_file_raw + '.THIS'
+                o_file_other = o_file_raw + '.OTHER'
                 if os.path.exists(o_file_0):
                     o_file = o_file_0
                 elif os.path.exists(o_file_1):

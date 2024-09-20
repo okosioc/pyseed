@@ -15,7 +15,7 @@ import pytest
 from py3seed import LayoutError
 from py3seed.utils import parse_layout, get_layout_fields
 from py3seed.commands.gen import _gen
-from .core.models import User, Team
+from .core.models import User, Team, Tag
 
 
 def test_layout_parsing():
@@ -103,6 +103,23 @@ def test_layout_parsing():
     assert first_row[0]['format'] == 'summary'
     assert len(first_row[1]['rows'][0]) == 7
     assert first_row[1]['rows'][0][0]['name'] == 'avatar'
+
+    #
+    # Test recursively parsing
+    #
+    tag_read_layout = '''#!read?title=Tags
+          name
+          albums
+            cover, title, tags
+    '''
+    tag_schema = Tag.schema()
+    layout = parse_layout(tag_read_layout, tag_schema)
+    assert layout['action'] == 'read'
+    second_row = layout['rows'][1]
+    assert second_row[0]['name'] == 'albums'
+    assert second_row[0]['rows'][0][0]['name'] == 'cover'
+    assert second_row[0]['rows'][0][2]['name'] == 'tags'
+    assert second_row[0]['rows'][0][2]['name'] == 'tags'
 
 
 def test_gen():
