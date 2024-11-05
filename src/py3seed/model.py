@@ -124,7 +124,7 @@ class Format(SimpleEnum):
     FLOAT = 'float'  # Default format for float
     SELECT = 'select'  # Default format for SimpleEnum
     BUTTONGROUP = 'buttongroup'
-    TAG = 'tag'  # Tag input
+    TAG = 'tag'  # Tag input for List[str]
     TEXTAREA = 'textarea'
     RTE = 'rte'
     MARKDOWN = 'markdown'
@@ -1205,7 +1205,11 @@ class BaseModel(metaclass=ModelMeta):
                             field_schema.update({
                                 'type': 'array',
                                 # Your program should use the reference object's schema to replace `items` value
-                                'items': {'ref': f_type.__name__},
+                                'items': {
+                                    'type': 'object',
+                                    'ref': f_type.__name__,
+                                    'py_type': f_type.__name__
+                                },
                                 'py_type': f'List[{f_type.__name__}]',
                             })
                         else:

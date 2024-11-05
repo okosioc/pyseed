@@ -377,20 +377,29 @@ class MongoModel(BaseModel):
         if errors:
             raise DataError(f'It is an illegal {self.__class__.__name__} with errors, {errors}')
         #
+        ret = True
         collection = self.get_collection(**kwargs)
         if insert_with_id or not self._id:
-            # InsertOneResult
+            # InsertOneResult, exception will be thrown if failed, so we return True here.
             result = collection.insert_one(self.dict())
             self._id = result.inserted_id
-            return result
         else:
             # UpdateResult
-            return collection.replace_one({'_id': self._id}, self.dict())
+            ur = collection.replace_one({'_id': self._id}, self.dict())
+            if ur.modified_count != 1:
+                ret = False
+        #
+        return ret
 
     def delete(self, **kwargs):
+        """ Delete self. """
         collection = self.get_collection(**kwargs)
         # DeleteResult
-        return collection.delete_one({'_id': self._id})
+        dr = collection.delete_one({'_id': self._id})
+        if dr.deleted_count == 1:
+            return True
+        #
+        return False
 
 
 # ----------------------------------------------------------------------------------------------------------------------

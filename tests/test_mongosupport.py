@@ -89,6 +89,6 @@ def test_crud(db):
     assert len(team1.members) == 4
 
     # D
-    assert usr.delete().deleted_count == 1
+    assert usr.delete()
     # Verify
     assert User.count({}) == 3
